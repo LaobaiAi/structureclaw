@@ -3,9 +3,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$SCRIPT_DIR"
 CLI_VERSION="0.1.0"
-HUB_SCRIPT="$ROOT_DIR/scripts/claw.sh"
+ROOT_DIR=""
+HUB_SCRIPT=""
 
 print_help() {
   cat <<'EOF'
@@ -36,10 +36,27 @@ EOF
 }
 
 ensure_hub_script() {
-  if [[ ! -x "$HUB_SCRIPT" ]]; then
-    echo "Missing executable hub script: $HUB_SCRIPT"
-    exit 1
+  if [[ -x "${SCLAW_PROJECT_ROOT:-}/scripts/claw.sh" ]]; then
+    ROOT_DIR="${SCLAW_PROJECT_ROOT}"
+    HUB_SCRIPT="$ROOT_DIR/scripts/claw.sh"
+    return 0
   fi
+
+  if [[ -x "$PWD/scripts/claw.sh" ]]; then
+    ROOT_DIR="$PWD"
+    HUB_SCRIPT="$ROOT_DIR/scripts/claw.sh"
+    return 0
+  fi
+
+  if [[ -x "$SCRIPT_DIR/scripts/claw.sh" ]]; then
+    ROOT_DIR="$SCRIPT_DIR"
+    HUB_SCRIPT="$ROOT_DIR/scripts/claw.sh"
+    return 0
+  fi
+
+  echo "Cannot find scripts/claw.sh in current directory."
+  echo "Run this command from the StructureClaw project root, or set SCLAW_PROJECT_ROOT."
+  exit 1
 }
 
 install_cli() {
@@ -63,9 +80,9 @@ install_cli() {
     exit 1
   fi
 
-  ln -sf "$ROOT_DIR/sclaw" "$target"
+  ln -sf "$SCRIPT_DIR/sclaw" "$target"
 
-  echo "Installed: $target -> $ROOT_DIR/sclaw"
+  echo "Installed: $target -> $SCRIPT_DIR/sclaw"
   echo "If command is not found, add ~/.local/bin to your PATH."
 }
 

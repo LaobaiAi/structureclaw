@@ -1,0 +1,13 @@
+{
+  "name": "structureclaw-cli",
+  "version": "0.1.0",
+  "description": "CLI wrapper for StructureClaw local workflows",
+  "license": "MIT",
+  "bin": {
+    "sclaw": "./sclaw"
+  },
+  "files": [
+    "sclaw",
+    "scripts/claw.sh"
+  ]
+}

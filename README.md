@@ -97,6 +97,14 @@ sclaw version
 sclaw start
 ```
 
+也支持 npm 全局安装（安装后可直接用 `sclaw`）：
+
+```bash
+npm install -g .
+sclaw version
+sclaw start
+```
+
 ### 进阶场景
 
 1. 完整分析依赖（非 lite）：
