@@ -3,7 +3,7 @@ UV_CACHE_DIR ?= /tmp/uv-cache
 UV_PYTHON_INSTALL_DIR ?= /tmp/uv-python
 CORE_PYTHON_VERSION ?= 3.11
 
-.PHONY: help install setup-core-lite setup-core-full setup-core-lite-uv setup-core-full-uv dev-backend dev-frontend dev-core-lite dev-core-full build db-up db-down db-init docker-up docker-down local-up local-up-full local-up-uv local-up-full-uv local-up-noinfra local-down local-status health check-startup up
+.PHONY: help install setup-core-lite setup-core-full setup-core-lite-uv setup-core-full-uv dev-backend dev-frontend dev-core-lite dev-core-full build db-up db-down db-init docker-up docker-down local-up local-up-full local-up-uv local-up-full-uv local-up-noinfra local-down local-status health check-startup doctor start start-full stop status logs up
 
 help:
 	@echo "Available targets:"
@@ -31,6 +31,12 @@ help:
 	@echo "  local-status    Show local app process/health status"
 	@echo "  health          Check local service health endpoints"
 	@echo "  check-startup   Run local startup checks without launching the full stack"
+	@echo "  doctor          Beginner alias of check-startup"
+	@echo "  start           Beginner one-command startup (lite + uv)"
+	@echo "  start-full      Beginner one-command startup (full + uv)"
+	@echo "  stop            Beginner alias of local-down"
+	@echo "  status          Beginner alias of local-status"
+	@echo "  logs            Show logs (default: all services)"
 	@echo "  up              Alias of docker-up"
 
 install:
@@ -112,5 +118,22 @@ health:
 
 check-startup:
 	./scripts/check-startup.sh
+
+doctor: check-startup
+
+start:
+	./scripts/claw.sh start
+
+start-full:
+	./scripts/claw.sh start-full
+
+stop:
+	./scripts/claw.sh stop
+
+status:
+	./scripts/claw.sh status
+
+logs:
+	./scripts/claw.sh logs
 
 up: docker-up

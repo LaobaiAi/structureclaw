@@ -58,49 +58,80 @@ structureclaw/
 
 ## 快速开始
 
-### 先做自检
+### 30 秒上手（默认推荐）
 
-第一次打开仓库，先跑：
+第一次进入仓库，只需要这 3 条命令：
 
 ```bash
-make check-startup
+make doctor
+make start
+make status
 ```
 
-它会检查：
+补充：
 
-- backend 编译、lint、Prisma schema
-- frontend 类型检查、lint
-- core 是否能导入并完成一次简化分析
+- `make doctor`: 启动前自检（不拉起完整服务）
+- `make start`: 新手默认启动（lite 分析依赖 + uv 管理 Python 3.11）
+- `make status`: 查看进程和健康状态
+- `make stop`: 停止本地服务和基础设施
+- `make logs`: 查看日志（默认 frontend/backend/core）
 
-说明：
+### 命令入口（统一入口）
 
-- `frontend build` 也会被执行，但仅作为可选项
-- 如果看到 `EXDEV`，通常是当前文件系统挂载方式导致的 Next.js 生产构建问题，不影响 `next dev`
+除了 `make`，也可以直接使用统一命令入口：
 
-### 方式一：本地源码启动（推荐给新手）
+```bash
+./scripts/claw.sh help
+./scripts/claw.sh doctor
+./scripts/claw.sh start
+./scripts/claw.sh status
+./scripts/claw.sh logs all --follow
+./scripts/claw.sh stop
+```
 
-推荐直接使用 `uv`，它会自动创建 `core/.venv` 的 Python 3.11 环境：
+### 进阶场景
+
+1. 完整分析依赖（非 lite）：
+
+```bash
+make start-full
+```
+
+2. 继续使用兼容保留的旧命令：
 
 ```bash
 make local-up-uv
-```
-
-如果需要完整分析依赖：
-
-```bash
 make local-up-full-uv
-```
-
-停止服务：
-
-```bash
 make local-down
+make local-status
 ```
 
-查看状态：
+3. Docker 全容器栈：
 
 ```bash
-make local-status
+cp .env.example .env
+make up
+```
+
+4. 手动分步启动（调试某个服务）：
+
+```bash
+make install
+make db-init
+make setup-core-lite-uv
+make dev-backend
+make dev-frontend
+make dev-core-lite
+```
+
+## 最常用命令
+
+```bash
+make doctor
+make start
+make status
+make stop
+make logs
 ```
 
 启动后访问：
@@ -109,111 +140,6 @@ make local-status
 - API: `http://localhost:8000`
 - API Docs: `http://localhost:8000/docs`
 - Analysis Engine: `http://localhost:8001`
-
-`make local-up-uv` 会自动：
-
-- 补齐缺失的环境变量文件
-- 安装前后端依赖
-- 创建 `core/.venv`
-- 启动 `postgres` 和 `redis`（Docker）
-- 初始化数据库
-- 启动 frontend、backend、core
-
-如果本机没有 `uv`，再退回传统方式：
-
-```bash
-make local-up
-```
-
-### 方式二：Docker Compose
-
-适合想直接起完整容器栈的情况：
-
-```bash
-cp .env.example .env
-make up
-```
-
-### 方式三：手动分步启动
-
-1. 安装前后端依赖：
-
-```bash
-make install
-```
-
-2. 准备后端环境变量：
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-3. 启动数据库和 Redis：
-
-```bash
-make db-up
-```
-
-4. 初始化数据库结构和种子数据：
-
-```bash
-make db-init
-```
-
-5. 准备 Python 分析引擎环境：
-
-轻量模式，仅用于本地跑通接口和简化分析：
-
-```bash
-make setup-core-lite-uv
-```
-
-传统 `venv` 写法：
-
-```bash
-make setup-core-lite
-```
-
-完整模式，安装全部分析依赖：
-
-```bash
-make setup-core-full-uv
-```
-
-传统 `venv` 写法：
-
-```bash
-make setup-core-full
-```
-
-6. 分别启动三个服务：
-
-```bash
-make dev-backend
-```
-
-```bash
-make dev-frontend
-```
-
-```bash
-make dev-core-lite
-```
-
-如果你装的是完整依赖，也可以使用：
-
-```bash
-make dev-core-full
-```
-
-## 最常用命令
-
-```bash
-make check-startup
-make local-up-uv
-make local-down
-make local-status
-```
 
 ## 环境变量
 
@@ -276,7 +202,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - 前端 lint 通过
 - `uv 0.10.8` 可创建 Python 3.11 环境
 - `core` 可在 lite 依赖下导入并执行简化静力分析
-- `make check-startup` 可通过
+- `make doctor`（等价于 `make check-startup`）可通过
 
 说明：
 
@@ -312,7 +238,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - 如果未配置 Redis，后端会使用内存缓存降级模式
 - `core/requirements.txt` 包含较重的工程分析依赖，首次安装可能较慢
 - `core/requirements-lite.txt` 适合本地快速起服务，但不代表具备完整分析能力
-- 对新手来说，最省事的路径是先 `make check-startup`，再 `make local-up-uv`
+- 对新手来说，最省事的路径是先 `make doctor`，再 `make start`
 
 ## 后续建议
 
