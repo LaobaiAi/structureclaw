@@ -56,6 +56,42 @@ if 'engineVersion' not in ok_result['meta'] or 'timestamp' not in ok_result['met
     raise SystemExit('meta.engineVersion/meta.timestamp required')
 print('[ok] analyze success envelope contract')
 
+truss_3d_model = StructureModelV1(
+    schema_version='1.0.0',
+    nodes=[
+        Node(id='1', x=0, y=1, z=0, restraints=[True, True, True, False, False, False]),
+        Node(id='2', x=2, y=1, z=0, restraints=[False, True, True, False, False, False]),
+    ],
+    elements=[Element(id='1', type='truss', nodes=['1', '2'], material='1', section='1')],
+    materials=[Material(id='1', name='steel', E=200000, nu=0.3, rho=7850)],
+    sections=[Section(id='1', name='A1', type='rod', properties={'A': 0.01})],
+    load_cases=[{'id': 'LC1', 'type': 'other', 'loads': [{'node': '2', 'fx': 10.0}]}],
+    load_combinations=[],
+)
+
+truss_3d_request = AnalysisRequest(type='static', model=truss_3d_model, parameters={'loadCaseIds': ['LC1']})
+truss_3d_result = asyncio.run(analyze(truss_3d_request)).model_dump()
+if truss_3d_result['success'] is not True:
+    raise SystemExit('Expected success=true for 3D truss request')
+data = truss_3d_result.get('data', {})
+if data.get('analysisMode') != 'linear_3d_truss':
+    raise SystemExit(f"Expected analysisMode=linear_3d_truss, got {data.get('analysisMode')}")
+required_data_fields = {'displacements', 'forces', 'reactions', 'envelope', 'summary'}
+missing_data = required_data_fields - set(data.keys())
+if missing_data:
+    raise SystemExit(f'Missing analyze data fields for 3D truss: {sorted(missing_data)}')
+required_envelope_fields = {
+    'maxAbsDisplacement',
+    'maxAbsAxialForce',
+    'maxAbsShearForce',
+    'maxAbsMoment',
+    'maxAbsReaction',
+}
+missing_envelope = required_envelope_fields - set((data.get('envelope') or {}).keys())
+if missing_envelope:
+    raise SystemExit(f'Missing envelope fields for 3D truss: {sorted(missing_envelope)}')
+print('[ok] analyze 3d truss envelope contract')
+
 bad_request = AnalysisRequest(type='unknown', model=model, parameters={})
 try:
     asyncio.run(analyze(bad_request))
