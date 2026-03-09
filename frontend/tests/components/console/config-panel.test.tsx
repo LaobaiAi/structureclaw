@@ -140,8 +140,8 @@ describe('ConfigPanel (CONS-05, CONS-06)', () => {
   it('renders selects in a 3-column grid', () => {
     const { container } = renderWithProvider()
 
-    // Find the grid container
-    const grid = container.querySelector('.grid-cols-3')
+    // Find the grid container - sm:grid-cols-3 creates the responsive grid
+    const grid = container.querySelector('[class*="grid-cols-3"]')
     expect(grid).toBeInTheDocument()
   })
 
