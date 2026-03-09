@@ -40,7 +40,7 @@
 - 已新增 Agent 编排入口：`POST /api/v1/agent/run`
   - 已新增工具协议查询：`GET /api/v1/agent/tools`
   - 支持自然语言请求 + 工具链执行轨迹返回
-  - 当前工具链：`text-to-model-draft -> convert -> validate -> analyze`
+  - 当前工具链：`text-to-model-draft -> convert -> validate -> analyze -> code-check -> report`
   - 无模型输入时先执行文本草模；信息不足则返回结构化缺参提示
 - Chat 已复用 Agent 执行入口：`POST /api/v1/chat/execute`
 - `POST /api/v1/chat/message` 新增 `mode` 开关：`chat/execute/auto`

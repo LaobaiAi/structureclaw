@@ -5,8 +5,9 @@ import { config } from '../config/index.js';
 import { createChatModel } from '../utils/llm.js';
 import { logger } from '../utils/logger.js';
 
-export type AgentToolName = 'text-to-model-draft' | 'convert' | 'validate' | 'analyze' | 'code-check';
+export type AgentToolName = 'text-to-model-draft' | 'convert' | 'validate' | 'analyze' | 'code-check' | 'report';
 export type AgentRunMode = 'chat' | 'execute' | 'auto';
+export type AgentReportFormat = 'json' | 'markdown' | 'both';
 
 type InferredModelType = 'beam' | 'truss' | 'portal-frame' | 'double-span-beam' | 'unknown';
 
@@ -46,6 +47,11 @@ export interface AgentRunParams {
     analysisType?: 'static' | 'dynamic' | 'seismic' | 'nonlinear';
     parameters?: Record<string, unknown>;
     autoAnalyze?: boolean;
+    autoCodeCheck?: boolean;
+    designCode?: string;
+    codeCheckElements?: string[];
+    includeReport?: boolean;
+    reportFormat?: AgentReportFormat;
   };
 }
 
@@ -88,6 +94,12 @@ export interface AgentRunResult {
   toolCalls: AgentToolCall[];
   model?: Record<string, unknown>;
   analysis?: unknown;
+  codeCheck?: unknown;
+  report?: {
+    summary: string;
+    json: Record<string, unknown>;
+    markdown?: string;
+  };
   metrics?: {
     toolCount: number;
     failedToolCount: number;
@@ -131,7 +143,7 @@ export class AgentService {
     ];
 
     return {
-      version: '1.1.0',
+      version: '1.2.0',
       runRequestSchema: {
         type: 'object',
         required: ['message'],
@@ -147,6 +159,11 @@ export class AgentService {
               analysisType: { enum: ['static', 'dynamic', 'seismic', 'nonlinear'] },
               parameters: { type: 'object' },
               autoAnalyze: { type: 'boolean' },
+              autoCodeCheck: { type: 'boolean' },
+              designCode: { type: 'string' },
+              codeCheckElements: { type: 'array', items: { type: 'string' } },
+              includeReport: { type: 'boolean' },
+              reportFormat: { enum: ['json', 'markdown', 'both'] },
             },
           },
         },
@@ -164,6 +181,15 @@ export class AgentService {
           toolCalls: { type: 'array', items: { type: 'object' } },
           model: { type: 'object' },
           analysis: { type: 'object' },
+          codeCheck: { type: 'object' },
+          report: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string' },
+              json: { type: 'object' },
+              markdown: { type: 'string' },
+            },
+          },
           metrics: {
             type: 'object',
             properties: {
@@ -302,10 +328,10 @@ export class AgentService {
         },
         {
           name: 'code-check',
-          description: '结构规范校核（预留）',
+          description: '结构规范校核（最小规则集）',
           inputSchema: {
             type: 'object',
-            required: ['modelId', 'code', 'elements'],
+            required: ['code', 'elements'],
             properties: {
               modelId: { type: 'string' },
               code: { type: 'string' },
@@ -314,6 +340,29 @@ export class AgentService {
           },
           outputSchema: {
             type: 'object',
+          },
+          errorCodes: [],
+        },
+        {
+          name: 'report',
+          description: '将模型、分析与校核结果汇总为可读报告',
+          inputSchema: {
+            type: 'object',
+            required: ['message', 'analysis'],
+            properties: {
+              message: { type: 'string' },
+              analysis: { type: 'object' },
+              codeCheck: { type: 'object' },
+              format: { enum: ['json', 'markdown', 'both'] },
+            },
+          },
+          outputSchema: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string' },
+              json: { type: 'object' },
+              markdown: { type: 'string' },
+            },
           },
           errorCodes: [],
         },
@@ -379,6 +428,10 @@ export class AgentService {
     const modelInput = params.context?.model;
     const sourceFormat = params.context?.modelFormat || 'structuremodel-v1';
     const autoAnalyze = params.context?.autoAnalyze ?? true;
+    const autoCodeCheck = params.context?.autoCodeCheck ?? this.inferCodeCheckIntent(params.message);
+    const designCode = params.context?.designCode || 'GB50017';
+    const includeReport = params.context?.includeReport ?? true;
+    const reportFormat = params.context?.reportFormat || 'both';
     const analysisType = params.context?.analysisType || this.inferAnalysisType(params.message);
     const analysisParameters = params.context?.parameters || {};
 
@@ -546,22 +599,88 @@ export class AgentService {
     try {
       const analyzed = await this.engineClient.post('/analyze', analyzeInput);
       this.completeToolCallSuccess(analyzeCall, analyzed.data);
+      const analysisSuccess = Boolean(analyzed.data?.success);
+      let codeCheckResult: unknown;
+
+      if (analysisSuccess && autoCodeCheck) {
+        plan.push(`执行 ${designCode} 规范校核`);
+        const codeCheckElements = params.context?.codeCheckElements?.length
+          ? params.context?.codeCheckElements
+          : this.extractElementIds(normalizedModel);
+        const codeCheckInput = {
+          modelId: traceId,
+          code: designCode,
+          elements: codeCheckElements,
+        };
+        const codeCheckCall = this.startToolCall('code-check', codeCheckInput);
+        toolCalls.push(codeCheckCall);
+
+        try {
+          const codeChecked = await this.engineClient.post('/code-check', {
+            model_id: codeCheckInput.modelId,
+            code: codeCheckInput.code,
+            elements: codeCheckInput.elements,
+          });
+          this.completeToolCallSuccess(codeCheckCall, codeChecked.data);
+          codeCheckResult = codeChecked.data;
+        } catch (error: any) {
+          this.completeToolCallError(codeCheckCall, error);
+          const result: AgentRunResult = {
+            traceId,
+            durationMs: Date.now() - startedAt,
+            success: false,
+            mode,
+            needsModelInput: false,
+            plan,
+            toolCalls,
+            model: normalizedModel,
+            analysis: analyzed.data,
+            metrics: this.buildMetrics(toolCalls),
+            response: `规范校核失败：${codeCheckCall.error}`,
+          };
+          this.logRunResult(traceId, sessionKey, result);
+          return result;
+        }
+      }
+
+      let report: AgentRunResult['report'];
+      if (analysisSuccess && includeReport) {
+        plan.push('生成可读计算与校核报告');
+        const reportCall = this.startToolCall('report', {
+          message: params.message,
+          analysis: analyzed.data,
+          codeCheck: codeCheckResult,
+          format: reportFormat,
+        });
+        toolCalls.push(reportCall);
+        report = this.generateReport({
+          message: params.message,
+          analysisType,
+          analysis: analyzed.data,
+          codeCheck: codeCheckResult,
+          format: reportFormat,
+        });
+        this.completeToolCallSuccess(reportCall, report);
+      }
 
       const response = await this.renderSummary(
         params.message,
-        `分析完成。analysis_type=${analysisType}, success=${String(analyzed.data?.success ?? false)}`,
+        `分析完成。analysis_type=${analysisType}, success=${String(analyzed.data?.success ?? false)}`
+          + (autoCodeCheck ? `, code_check=${String(Boolean(codeCheckResult))}` : ''),
       );
 
       const result: AgentRunResult = {
         traceId,
         durationMs: Date.now() - startedAt,
-        success: Boolean(analyzed.data?.success),
+        success: analysisSuccess,
         mode,
         needsModelInput: false,
         plan,
         toolCalls,
         model: normalizedModel,
         analysis: analyzed.data,
+        codeCheck: codeCheckResult,
+        report,
         metrics: this.buildMetrics(toolCalls),
         response,
       };
@@ -598,6 +717,74 @@ export class AgentService {
       return 'nonlinear';
     }
     return 'static';
+  }
+
+  private inferCodeCheckIntent(message: string): boolean {
+    const text = message.toLowerCase();
+    return text.includes('校核')
+      || text.includes('规范')
+      || text.includes('code-check')
+      || text.includes('验算');
+  }
+
+  private extractElementIds(model: Record<string, unknown> | undefined): string[] {
+    if (!model) {
+      return [];
+    }
+    const elements = model['elements'];
+    if (!Array.isArray(elements)) {
+      return [];
+    }
+    return elements
+      .map((item) => (item && typeof item === 'object' ? (item as Record<string, unknown>).id : undefined))
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  }
+
+  private generateReport(params: {
+    message: string;
+    analysisType: 'static' | 'dynamic' | 'seismic' | 'nonlinear';
+    analysis: unknown;
+    codeCheck?: unknown;
+    format: AgentReportFormat;
+  }): AgentRunResult['report'] {
+    const analysisSuccess = Boolean((params.analysis as any)?.success);
+    const codeCheckSummary = (params.codeCheck as any)?.summary;
+    const codeCheckText = codeCheckSummary
+      ? `校核通过 ${String(codeCheckSummary.passed ?? 0)} / ${String(codeCheckSummary.total ?? 0)}`
+      : '未执行规范校核';
+    const summary = `分析类型 ${params.analysisType}，分析${analysisSuccess ? '成功' : '失败'}，${codeCheckText}。`;
+    const jsonReport: Record<string, unknown> = {
+      intent: params.message,
+      analysisType: params.analysisType,
+      analysis: params.analysis,
+      codeCheck: params.codeCheck,
+      generatedAt: new Date().toISOString(),
+    };
+
+    if (params.format === 'json') {
+      return {
+        summary,
+        json: jsonReport,
+      };
+    }
+
+    const markdown = [
+      '# StructureClaw 计算报告',
+      '',
+      `- 用户意图：${params.message}`,
+      `- 分析类型：${params.analysisType}`,
+      `- 分析结果：${analysisSuccess ? '成功' : '失败'}`,
+      `- 规范校核：${codeCheckText}`,
+      '',
+      '## 结果摘要',
+      summary,
+    ].join('\n');
+
+    return {
+      summary,
+      json: jsonReport,
+      markdown: params.format === 'both' || params.format === 'markdown' ? markdown : undefined,
+    };
   }
 
   private async renderSummary(message: string, fallback: string): Promise<string> {

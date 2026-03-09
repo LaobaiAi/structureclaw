@@ -14,6 +14,11 @@ const agentRunSchema = z.object({
     analysisType: z.enum(['static', 'dynamic', 'seismic', 'nonlinear']).optional(),
     parameters: z.record(z.any()).optional(),
     autoAnalyze: z.boolean().optional(),
+    autoCodeCheck: z.boolean().optional(),
+    designCode: z.string().optional(),
+    codeCheckElements: z.array(z.string()).optional(),
+    includeReport: z.boolean().optional(),
+    reportFormat: z.enum(['json', 'markdown', 'both']).optional(),
   }).optional(),
 });
 
