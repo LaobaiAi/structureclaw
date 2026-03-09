@@ -12,7 +12,7 @@ Frontend rewrite requirements, all implemented in v1.
 - [ ] **DSGN-01**: Establish design tokens (colors, fonts, spacing, border-radius, shadows)
 - [ ] **DSGN-02**: Configure Geist font (Sans + Mono)
 - [ ] **DSGN-03**: Tailwind custom configuration (extend theme)
-- [ ] **DSGN-04**: `cn()` utility function (clsx + tailwind-merge)
+- [x] **DSGN-04**: `cn()` utility function (clsx + tailwind-merge)
 - [ ] **DSGN-05**: Dark/Light/System tri-state theme switching
 - [ ] **DSGN-06**: Custom theme accent color
 - [ ] **DSGN-07**: Glassmorphism effect component variants
@@ -112,7 +112,7 @@ Which phase covers which requirement. Updated during roadmap creation.
 | DSGN-01 | Phase 1 | Pending |
 | DSGN-02 | Phase 1 | Pending |
 | DSGN-03 | Phase 1 | Pending |
-| DSGN-04 | Phase 1 | Pending |
+| DSGN-04 | Phase 1 | Complete |
 | DSGN-05 | Phase 1 | Pending |
 | DSGN-06 | Phase 1 | Pending |
 | DSGN-07 | Phase 1 | Pending |
