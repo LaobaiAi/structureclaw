@@ -87,12 +87,12 @@ Plans:
   2. API client centralizes fetch logic with consistent error handling
   3. SSE hook properly manages connection lifecycle (connect, reconnect, cleanup)
   4. Theme preference persists in localStorage and syncs across tabs
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 04-01: Zustand store factory setup
-- [ ] 04-02: API client with contract tests
-- [ ] 04-03: SSE streaming hook with lifecycle management
+- [ ] 04-01: Zustand store factory setup (STAT-01)
+- [ ] 04-02: API client with contract tests (STAT-02)
+- [ ] 04-03: SSE streaming hook with lifecycle management (STAT-03, STAT-04)
 
 ### Phase 5: Console Feature
 **Goal**: Deliver the complete console experience with all existing functionality in the new design
@@ -156,3 +156,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 *Total phases: 6*
 *Phase 1 planned: 2026-03-09*
 *Phase 3 planned: 2026-03-09*
+*Phase 4 planned: 2026-03-09*
