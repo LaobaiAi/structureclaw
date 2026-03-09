@@ -57,5 +57,8 @@ assert valid_output.exists()
 failed_items = [item for item in report['items'] if item['status'] == 'failed']
 assert len(failed_items) == 1
 assert failed_items[0]['errorCode'] in {'INVALID_STRUCTURE_MODEL', 'HTTP_422'}
+failure_dist = report['summary'].get('failureByErrorCode') or {}
+assert isinstance(failure_dist, dict)
+assert failure_dist.get(failed_items[0]['errorCode']) == 1
 print('[ok] convert batch report with mixed success/failure')
 PY

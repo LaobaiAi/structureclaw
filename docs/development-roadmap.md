@@ -69,7 +69,7 @@
   - `GET /schema/converters`（查询已支持转换格式）
   - `POST /validate`
   - `POST /convert`（支持 `structuremodel-v1`、`simple-1`、`compact-1`、`midas-text-1` 的导入/导出，目标版本当前 `1.0.x`）
-  - 已新增批量转换脚本与结构化报告：`scripts/convert-batch.py`
+- 已新增批量转换脚本与结构化报告：`scripts/convert-batch.py`（含 `failureByErrorCode` 失败分布）
   - 已新增 `v1.x` 迁移骨架：支持 `target_schema_version=1.0.1` 并记录 `metadata.schema_migration`
 - 现有数据模型雏形：`Node/Element/Material/Section/StructuralModel`
 

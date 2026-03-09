@@ -125,6 +125,12 @@ async def run() -> int:
 
     success_count = sum(1 for item in results if item.status == "ok")
     failed_count = len(results) - success_count
+    failure_by_error_code: Dict[str, int] = {}
+    for item in results:
+        if item.status != "failed":
+            continue
+        code = item.error_code or "UNKNOWN"
+        failure_by_error_code[code] = failure_by_error_code.get(code, 0) + 1
 
     report: Dict[str, Any] = {
         "startedAt": started_at,
@@ -138,6 +144,7 @@ async def run() -> int:
             "total": len(results),
             "success": success_count,
             "failed": failed_count,
+            "failureByErrorCode": failure_by_error_code,
         },
         "items": [
             {

@@ -288,11 +288,13 @@ make core-regression
 覆盖：
 
 - analyze 响应契约
-- 静力黄金算例
+- 静力黄金算例（2D + 3D 最小子集）
 - schema 样例校验
 - convert round-trip
+- midas-text 转换器导入/导出与字段级报错
+- converter API 契约（`/schema/converters` 与 `/convert` 错误码）
 - schema migration
-- batch convert 与通过率
+- batch convert（含 `failureByErrorCode` 失败分布）与通过率
 
 ### 7.3 全量自检
 
@@ -317,8 +319,8 @@ make logs
 
 ## 9. 已知边界（当前版本）
 
-- 分析能力以 2D 线弹性 MVP 为主，3D 与更高阶分析待扩展
-- 外部工程格式转换插件尚未完成首批高频格式接入
+- 分析能力已覆盖 2D + 3D 最小线弹性场景，更高阶分析待扩展
+- 外部工程格式已接入 `midas-text-1` 最小子集，更多高频格式待扩展
 - 前端仍以原型为主，复杂业务交互与设计系统待深化
 - 当前强调“可跑通 + 可回归 + 可扩展”的工程基线
 
