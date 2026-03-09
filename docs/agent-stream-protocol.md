@@ -12,6 +12,7 @@
 {
   "message": "请做静力分析",
   "mode": "execute",
+  "traceId": "trace-demo-001",
   "context": {
     "modelFormat": "structuremodel-v1",
     "model": {

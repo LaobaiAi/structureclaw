@@ -46,6 +46,7 @@ const run = async () => {
   }
 
   const requestContext = payload.runRequestSchema?.properties?.context?.properties || {};
+  assert(payload.runRequestSchema?.properties?.traceId?.type === 'string', 'runRequestSchema should include traceId');
   assert(requestContext.reportOutput?.enum?.includes('file'), 'runRequestSchema should include reportOutput=file');
   assert(requestContext.reportFormat?.enum?.includes('both'), 'runRequestSchema should include reportFormat=both');
 

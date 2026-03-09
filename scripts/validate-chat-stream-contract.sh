@@ -26,13 +26,17 @@ const run = async () => {
   const Fastify = require('fastify');
 
   const { AgentService } = await import('./backend/dist/services/agent.js');
-  AgentService.prototype.runStream = async function *mockRunStream() {
+  let capturedTraceId;
+  AgentService.prototype.runStream = async function *mockRunStream(params) {
+    capturedTraceId = params.traceId;
     const traceId = 'stream-trace-001';
-    yield { type: 'start', content: { traceId, mode: 'execute' } };
+    yield { type: 'start', content: { traceId, mode: 'execute', startedAt: '2026-03-09T00:00:00.000Z' } };
     yield {
       type: 'result',
       content: {
         traceId,
+        startedAt: '2026-03-09T00:00:00.000Z',
+        completedAt: '2026-03-09T00:00:00.008Z',
         durationMs: 8,
         success: true,
         mode: 'rule-based',
@@ -55,6 +59,7 @@ const run = async () => {
     payload: {
       message: 'stream contract test',
       mode: 'execute',
+      traceId: 'trace-stream-request-1',
       context: {
         model: { schema_version: '1.0.0' },
       },
@@ -72,10 +77,12 @@ const run = async () => {
   assert(chunks[0].type === 'start', 'first chunk should be start');
   assert(chunks.some((c) => c.type === 'result'), 'stream should contain result chunk');
   assert(chunks[chunks.length - 1].type === 'done', 'last chunk before [DONE] should be done');
+  assert(capturedTraceId === 'trace-stream-request-1', 'chat/stream should pass traceId to agent stream');
 
   const startTrace = chunks.find((c) => c.type === 'start')?.content?.traceId;
   const resultTrace = chunks.find((c) => c.type === 'result')?.content?.traceId;
   assert(startTrace && resultTrace && startTrace === resultTrace, 'traceId should match between start and result');
+  assert(typeof chunks.find((c) => c.type === 'start')?.content?.startedAt === 'string', 'start event should include startedAt');
 
   await app.close();
   console.log('[ok] chat stream contract regression');

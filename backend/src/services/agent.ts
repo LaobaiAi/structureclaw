@@ -166,6 +166,7 @@ export class AgentService {
           message: { type: 'string' },
           mode: { enum: ['chat', 'execute', 'auto'] },
           conversationId: { type: 'string' },
+          traceId: { type: 'string' },
           context: {
             type: 'object',
             properties: {

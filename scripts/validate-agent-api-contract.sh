@@ -63,6 +63,7 @@ const run = async () => {
   const requestBody = {
     message: '请分析并导出报告',
     conversationId: 'conv-api-1',
+    traceId: 'trace-request-001',
     context: {
       autoAnalyze: true,
       autoCodeCheck: true,
@@ -97,6 +98,8 @@ const run = async () => {
   assert(execPayload.artifacts?.[0]?.path === '/tmp/report.json', 'chat/execute should return artifacts');
 
   assert(captured.length >= 2, 'agent run should be called for both endpoints');
+  assert(captured[0]?.traceId === 'trace-request-001', 'agent/run should pass traceId');
+  assert(captured[1]?.traceId === 'trace-request-001', 'chat/execute should pass traceId');
   assert(captured[0]?.context?.reportOutput === 'file', 'agent/run should pass reportOutput context');
   assert(captured[1]?.context?.reportFormat === 'both', 'chat/execute should pass reportFormat context');
 

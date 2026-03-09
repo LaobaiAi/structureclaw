@@ -23,11 +23,15 @@ const run = async () => {
 
   let agentRunCount = 0;
   let chatSendCount = 0;
+  const capturedTraceIds = [];
 
-  AgentService.prototype.run = async function mockAgentRun() {
+  AgentService.prototype.run = async function mockAgentRun(params) {
     agentRunCount += 1;
+    capturedTraceIds.push(params.traceId);
     return {
       traceId: 'trace-route-001',
+      startedAt: '2026-03-09T00:00:00.000Z',
+      completedAt: '2026-03-09T00:00:00.006Z',
       durationMs: 6,
       success: true,
       mode: 'rule-based',
@@ -69,6 +73,7 @@ const run = async () => {
     payload: {
       message: 'auto with model',
       mode: 'auto',
+      traceId: 'trace-route-auto-1',
       context: {
         model: { schema_version: '1.0.0' },
       },
@@ -85,6 +90,7 @@ const run = async () => {
     payload: {
       message: 'force execute',
       mode: 'execute',
+      traceId: 'trace-route-exec-1',
     },
   });
   assert(forceExecResp.statusCode === 200, 'execute response should be 200');
@@ -92,6 +98,8 @@ const run = async () => {
   assert(forceExecPayload.mode === 'execute', 'mode=execute should route to execute');
 
   assert(agentRunCount === 2, 'agent run should be called twice');
+  assert(capturedTraceIds.includes('trace-route-auto-1'), 'auto execute should pass traceId');
+  assert(capturedTraceIds.includes('trace-route-exec-1'), 'forced execute should pass traceId');
   assert(chatSendCount === 1, 'chat send should be called once');
 
   await app.close();

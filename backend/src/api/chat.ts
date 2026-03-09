@@ -11,6 +11,7 @@ const sendMessageSchema = z.object({
   message: z.string().min(1).max(10000),
   mode: z.enum(['chat', 'execute', 'auto']).optional(),
   conversationId: z.string().optional(),
+  traceId: z.string().optional(),
   context: z.object({
     projectId: z.string().optional(),
     model: z.record(z.any()).optional(),
@@ -35,6 +36,7 @@ const createConversationSchema = z.object({
 const executeSchema = z.object({
   message: z.string().min(1).max(10000),
   conversationId: z.string().optional(),
+  traceId: z.string().optional(),
   context: z.object({
     model: z.record(z.any()).optional(),
     modelFormat: z.string().optional(),
@@ -54,6 +56,7 @@ const streamMessageSchema = z.object({
   message: z.string().min(1).max(10000),
   mode: z.enum(['chat', 'execute', 'auto']).optional(),
   conversationId: z.string().optional(),
+  traceId: z.string().optional(),
   context: z.object({
     projectId: z.string().optional(),
     model: z.record(z.any()).optional(),
@@ -82,6 +85,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
         properties: {
           message: { type: 'string' },
           conversationId: { type: 'string' },
+          traceId: { type: 'string' },
           context: { type: 'object' },
         },
       },
@@ -99,6 +103,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
         message: body.message,
         mode: 'execute',
         conversationId: body.conversationId,
+        traceId: body.traceId,
         context: {
           model: body.context?.model,
           modelFormat: body.context?.modelFormat,
@@ -200,6 +205,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
         message: body.message,
         mode: 'execute',
         conversationId: body.conversationId,
+        traceId: body.traceId,
         context: {
           model: body.context?.model,
           modelFormat: body.context?.modelFormat,
@@ -252,6 +258,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
         properties: {
           message: { type: 'string' },
           conversationId: { type: 'string' },
+          traceId: { type: 'string' },
           context: { type: 'object' },
         },
       },
