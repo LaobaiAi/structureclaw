@@ -23,4 +23,12 @@ echo "==> Convert round-trip"
 ./scripts/validate-convert-roundtrip.sh
 
 echo
+echo "==> Schema migration"
+./scripts/validate-schema-migration.sh
+
+echo
+echo "==> Batch convert report"
+./scripts/validate-convert-batch.sh
+
+echo
 echo "Core regression checks passed."

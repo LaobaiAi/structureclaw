@@ -19,6 +19,10 @@ from design.steel import SteelDesigner
 from design.code_check import CodeChecker
 from converters import get_converter, supported_formats
 from schemas.structure_model_v1 import StructureModelV1
+from schemas.migrations import (
+    is_supported_target_schema_version,
+    migrate_structure_model_v1,
+)
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -147,8 +151,8 @@ async def validate_structure_model(request: ValidateRequest):
 
 @app.post("/convert")
 async def convert_structure_model(request: ConvertRequest):
-    """标准化并转换结构模型（当前支持 schema v1.0.0）"""
-    if request.target_schema_version != "1.0.0":
+    """标准化并转换结构模型（支持 schema v1.0.x）"""
+    if not is_supported_target_schema_version(request.target_schema_version):
         raise HTTPException(
             status_code=400,
             detail={
@@ -192,9 +196,11 @@ async def convert_structure_model(request: ConvertRequest):
             },
         )
 
-    normalized = target_converter.from_v1(model)
+    migrated = migrate_structure_model_v1(model.model_dump(mode="json"), request.target_schema_version)
     if request.target_format == "structuremodel-v1":
-        normalized["schema_version"] = request.target_schema_version
+        normalized = migrated
+    else:
+        normalized = target_converter.from_v1(StructureModelV1.model_validate(migrated))
 
     return {
         "sourceFormat": request.source_format,
