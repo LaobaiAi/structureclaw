@@ -111,7 +111,7 @@ Plans:
 **Plans**: 7 plans in 6 waves
 
 Plans:
-- [ ] 05-00: Wave 0 - Test infrastructure and shadcn/ui components (Wave 0)
+- [x] 05-00: Wave 0 - Test infrastructure and shadcn/ui components (Wave 0)
 - [ ] 05-01: Console input controls (endpoint, mode, message, model JSON) (Wave 1)
 - [ ] 05-02: Configuration panel and execution hook (CONS-05, CONS-06, CONS-07, CONS-12) (Wave 2)
 - [ ] 05-03: Result display (CONS-08, CONS-09, CONS-10, CONS-17) (Wave 3)
@@ -147,8 +147,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Design System Foundation | 6/6 | Complete | 2026-03-09 |
 | 2. Component Library | 5/5 | Complete | 2026-03-09 |
 | 3. Layout System | 3/3 | Complete | 2026-03-09 |
-| 4. State & API Layer | 0/3 | Complete    | 2026-03-09 |
-| 5. Console Feature | 0/7 | Not started | - |
+| 4. State & API Layer | 3/3 | Complete    | 2026-03-09 |
+| 5. Console Feature | 1/7 | In progress | - |
 | 6. Pages & Accessibility | 0/4 | Not started | - |
 
 ---
