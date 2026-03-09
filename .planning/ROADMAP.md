@@ -31,13 +31,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can switch between light, dark, and system theme preferences without page flash
   4. Custom theme accent color can be applied and persists across sessions
   5. Glassmorphism effect utility classes are available for component use
-**Plans**: TBD
+**Plans**: 6 plans in 3 waves
 
 Plans:
-- [ ] 01-01: Design tokens and CSS variables
-- [ ] 01-02: Geist font configuration
-- [ ] 01-03: Tailwind theme extension
-- [ ] 01-04: Theme provider with tri-state support
+- [ ] 01-00: Wave 0 - Vitest test infrastructure and test stubs
+- [ ] 01-01: Design tokens and CSS variables (DSGN-01, DSGN-03)
+- [ ] 01-02: Geist font configuration (DSGN-02)
+- [ ] 01-03: cn() utility verification and tests (DSGN-04)
+- [ ] 01-04: Theme provider with tri-state support (DSGN-05)
+- [ ] 01-05: Accent color and glassmorphism utilities (DSGN-06, DSGN-07)
 
 ### Phase 2: Component Library
 **Goal**: Provide a complete set of UI primitives that embody the Linear/Notion aesthetic
@@ -140,7 +142,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Design System Foundation | 0/4 | Not started | - |
+| 1. Design System Foundation | 0/6 | Ready to execute | - |
 | 2. Component Library | 0/4 | Not started | - |
 | 3. Layout System | 0/3 | Not started | - |
 | 4. State & API Layer | 0/3 | Not started | - |
@@ -151,3 +153,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 *Roadmap created: 2026-03-09*
 *Granularity: standard*
 *Total phases: 6*
+*Phase 1 planned: 2026-03-09*
