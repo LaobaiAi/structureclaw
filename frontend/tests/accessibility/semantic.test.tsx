@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import ConsolePage from '@/app/(console)/console/page'
 import { AppStoreProvider } from '@/lib/stores/context'
 import type { StoreState } from '@/lib/stores/context'
@@ -56,8 +56,10 @@ describe('Semantic HTML (ACCS-03)', () => {
     return render(
       createElement(
         AppStoreProvider,
-        { initialState: createInitialState(initialState) as StoreState },
-        createElement(ConsolePage)
+        {
+          initialState: createInitialState(initialState),
+          children: createElement(ConsolePage) as ReactNode,
+        }
       )
     )
   }

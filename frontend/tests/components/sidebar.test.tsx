@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppSidebar } from '@/components/layout/app-sidebar'
@@ -11,11 +11,8 @@ vi.mock('next/navigation', () => ({
 
 // Polyfills for Radix UI
 beforeAll(() => {
-  // @ts-expect-error - polyfill for Radix UI
   window.HTMLElement.prototype.hasPointerCapture = vi.fn()
-  // @ts-expect-error - polyfill for Radix UI
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
-  // @ts-expect-error - polyfill for Radix UI
   window.HTMLElement.prototype.getBoundingClientRect = vi.fn(() => ({
     width: 0,
     height: 0,

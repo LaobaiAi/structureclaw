@@ -261,7 +261,7 @@ describe('Console Slice Extended State (CONS-01, CONS-02, CONS-03, CONS-04)', ()
 
     it('setStreamFrames updates streamFrames field', () => {
       const store = createTestStore()
-      const frames = [{ type: 'text', content: 'hello' }]
+      const frames: StreamFrame[] = [{ type: 'text', content: 'hello' }]
       store.getState().setStreamFrames(frames)
       expect(store.getState().streamFrames).toEqual(frames)
     })

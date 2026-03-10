@@ -11,11 +11,8 @@ vi.mock('next/navigation', () => ({
 
 // Polyfills for Radix UI
 beforeAll(() => {
-  // @ts-expect-error - polyfill for Radix UI
   window.HTMLElement.prototype.hasPointerCapture = vi.fn()
-  // @ts-expect-error - polyfill for Radix UI
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
-  // @ts-expect-error - polyfill for Radix UI
   window.HTMLElement.prototype.getBoundingClientRect = vi.fn(() => ({
     width: 0,
     height: 0,

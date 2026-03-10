@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import ConsolePage from '@/app/(console)/console/page'
 import { AppStoreProvider, useStore } from '@/lib/stores/context'
 import type { StoreState } from '@/lib/stores/context'
@@ -56,8 +56,10 @@ describe('ConsolePage Integration (CONS-13)', () => {
     return render(
       createElement(
         AppStoreProvider,
-        { initialState: createInitialState(initialState) as StoreState },
-        createElement(ConsolePage)
+        {
+          initialState: createInitialState(initialState),
+          children: createElement(ConsolePage) as ReactNode,
+        }
       )
     )
   }
@@ -188,8 +190,10 @@ describe('Accessibility - Semantic Structure (PAGE-02)', () => {
     return render(
       createElement(
         AppStoreProvider,
-        { initialState: createInitialState(initialState) as StoreState },
-        createElement(ConsolePage)
+        {
+          initialState: createInitialState(initialState),
+          children: createElement(ConsolePage) as ReactNode,
+        }
       )
     )
   }

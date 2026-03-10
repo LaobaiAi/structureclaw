@@ -10,7 +10,8 @@ import {
 } from '@/components/console'
 
 // Mock fetch globally
-const mockFetch = vi.fn()
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockFetch = vi.fn() as any
 global.fetch = mockFetch
 
 describe('Console Execution Integration (CONS-05, CONS-06, CONS-07, CONS-12)', () => {

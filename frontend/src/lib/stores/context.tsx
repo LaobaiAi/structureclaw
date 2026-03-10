@@ -47,7 +47,7 @@ export const AppStoreContext = createContext<StoreApi<StoreState> | null>(null)
 
 export interface AppStoreProviderProps {
   children: ReactNode
-  initialState?: StoreState
+  initialState?: Partial<StoreState>
 }
 
 /**

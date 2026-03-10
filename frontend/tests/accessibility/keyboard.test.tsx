@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
+import { type StoreState } from '@/lib/stores/context'
 
 /**
  * Keyboard Navigation Tests (ACCS-01)
@@ -27,7 +28,7 @@ vi.mock('@/hooks/use-console-execution', () => ({
 // ResizeObserver is already mocked globally in tests/setup.ts
 
 // Create a minimal initial state for testing
-const createInitialState = (): Record<string, unknown> => ({
+const createInitialState = (): Partial<StoreState> => ({
   endpoint: 'chat-message',
   mode: 'auto',
   conversationId: null,
@@ -70,8 +71,10 @@ describe('Keyboard Navigation (ACCS-01)', () => {
       return render(
         createElement(
           AppStoreProvider,
-          { initialState: { ...createInitialState(), ...initialState } as Parameters<typeof AppStoreProvider>[0]['initialState'] },
-          createElement(ConsolePage)
+          {
+            initialState: { ...createInitialState(), ...initialState },
+            children: createElement(ConsolePage) as ReactNode,
+          }
         )
       )
     }
@@ -216,8 +219,10 @@ describe('Keyboard Navigation (ACCS-01)', () => {
       return render(
         createElement(
           AppStoreProvider,
-          { initialState: createInitialState() as Parameters<typeof AppStoreProvider>[0]['initialState'] },
-          createElement(ConsolePage)
+          {
+            initialState: createInitialState(),
+            children: createElement(ConsolePage) as ReactNode,
+          }
         )
       )
     }
@@ -295,8 +300,10 @@ describe('Keyboard Navigation (ACCS-01)', () => {
       return render(
         createElement(
           AppStoreProvider,
-          { initialState: createInitialState() as Parameters<typeof AppStoreProvider>[0]['initialState'] },
-          createElement(ConsolePage)
+          {
+            initialState: createInitialState(),
+            children: createElement(ConsolePage) as ReactNode,
+          }
         )
       )
     }
@@ -505,8 +512,10 @@ describe('Keyboard Navigation (ACCS-01)', () => {
       return render(
         createElement(
           AppStoreProvider,
-          { initialState: createInitialState() as Parameters<typeof AppStoreProvider>[0]['initialState'] },
-          createElement(ConsolePage)
+          {
+            initialState: createInitialState(),
+            children: createElement(ConsolePage) as ReactNode,
+          }
         )
       )
     }
@@ -568,8 +577,10 @@ describe('Keyboard Navigation (ACCS-01)', () => {
       return render(
         createElement(
           AppStoreProvider,
-          { initialState: createInitialState() as Parameters<typeof AppStoreProvider>[0]['initialState'] },
-          createElement(ConsolePage)
+          {
+            initialState: createInitialState(),
+            children: createElement(ConsolePage) as ReactNode,
+          }
         )
       )
     }

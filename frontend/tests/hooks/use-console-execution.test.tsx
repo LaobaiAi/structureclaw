@@ -5,7 +5,8 @@ import { AppStoreProvider, useStore } from '@/lib/stores/context'
 import { useConsoleExecution } from '@/hooks/use-console-execution'
 
 // Mock fetch globally
-const mockFetch = vi.fn()
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockFetch = vi.fn() as any
 global.fetch = mockFetch
 
 describe('useConsoleExecution hook', () => {
@@ -18,8 +19,9 @@ describe('useConsoleExecution hook', () => {
     vi.restoreAllMocks()
   })
 
-  const wrapper = ({ children }: { children: React.ReactNode }) =>
-    createElement(AppStoreProvider, null, children)
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <AppStoreProvider>{children}</AppStoreProvider>
+  )
 
   const renderWithProvider = () => {
     return renderHook(() => {
