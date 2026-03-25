@@ -1388,7 +1388,18 @@ export class AgentService {
       return this.finalizeRunResult(traceId, sessionKey, params.message, result, params.context?.skillIds);
     }
 
-    const assessment = await this.assessInteractionNeeds(workingSession, locale, params.context?.skillIds, 'chat');
+    let assessment = await this.assessInteractionNeeds(workingSession, locale, params.context?.skillIds, 'chat');
+
+    // When all critical (structural) parameters are present, auto-apply defaults
+    // for non-critical parameters (includeReport, reportFormat, reportOutput, etc.)
+    // so the user is not forced to confirm each one individually.
+    // Loop because applying one default (e.g. includeReport=true) may reveal
+    // new non-critical parameters (e.g. reportFormat, reportOutput).
+    while (assessment.criticalMissing.length === 0 && assessment.nonCriticalMissing.length > 0) {
+      this.applyNonCriticalDefaults(workingSession, assessment.defaultProposals);
+      assessment = await this.assessInteractionNeeds(workingSession, locale, params.context?.skillIds, 'chat');
+    }
+
     const state: AgentInteractionState = assessment.criticalMissing.length > 0
       ? 'confirming'
       : assessment.nonCriticalMissing.length > 0
@@ -1536,6 +1547,18 @@ export class AgentService {
       const reportIntent = inferReportIntent(this.policy, message);
       if (reportIntent !== undefined) {
         session.resolved.includeReport = reportIntent;
+      }
+    }
+    if (session.resolved.includeReport === true && !session.resolved.reportFormat) {
+      const format = this.policy.inferReportFormat(message);
+      if (format) {
+        session.resolved.reportFormat = format;
+      }
+    }
+    if (session.resolved.includeReport === true && !session.resolved.reportOutput) {
+      const output = this.policy.inferReportOutput(message);
+      if (output) {
+        session.resolved.reportOutput = output;
       }
     }
   }

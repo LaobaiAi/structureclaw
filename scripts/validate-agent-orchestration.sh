@@ -287,7 +287,7 @@ const run = async () => {
       },
     });
     assert(collecting.success === true, 'chat complete-model turn should succeed');
-    assert(collecting.interaction?.state === 'collecting', `expected collecting state, got ${collecting.interaction?.state}`);
+    assert(collecting.interaction?.state === 'ready', `expected ready state, got ${collecting.interaction?.state}`);
     assert(collecting.model && Array.isArray(collecting.model.nodes), 'chat complete-model turn should return synchronized model');
 
     const incomplete = await svc.run({

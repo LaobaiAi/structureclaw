@@ -70,6 +70,41 @@ export class AgentPolicyService {
     return 'static';
   }
 
+  inferReportFormat(message: string): AgentPolicyReportFormat | undefined {
+    const text = message.toLowerCase();
+    const hasJson = text.includes('json');
+    const hasMarkdownWord = text.includes('markdown');
+    const hasMdToken = /\bmd\b/.test(text) || /\.md\b/.test(text);
+    const hasMarkdown = hasMarkdownWord || hasMdToken;
+
+    if (hasJson && hasMarkdown) return 'both';
+    if (text.includes('both') || text.includes('两种') || text.includes('都要')) return 'both';
+    if (text.includes('默认') || text.includes('default') || text.includes('确认') || text.includes('confirm')) return 'both';
+    if (hasJson) return 'json';
+    if (hasMarkdown) return 'markdown';
+    return undefined;
+  }
+
+  inferReportOutput(message: string): AgentPolicyReportOutput | undefined {
+    const text = message.toLowerCase();
+    const filePattern = /\bfile\b/;
+    const inlinePattern = /\binline\b/;
+    if (
+      filePattern.test(text)
+      || text.includes('文件')
+      || text.includes('输出到文件')
+      || text.includes('保存为文件')
+    ) return 'file';
+    if (
+      inlinePattern.test(text)
+      || text.includes('内联')
+      || text.includes('直接')
+      || text.includes('内联返回')
+    ) return 'inline';
+    if (text.includes('默认') || text.includes('default') || text.includes('确认') || text.includes('confirm')) return 'inline';
+    return undefined;
+  }
+
   normalizeReportFormat(value: string): AgentPolicyReportFormat {
     if (value === 'json' || value === 'markdown' || value === 'both') {
       return value;
