@@ -30,7 +30,9 @@ load-boundary/
 │   ├── load_action.py                    # 荷载动作模型
 │   ├── nodal_constraint.py               # 节点约束模型
 │   ├── member_end_release.py             # 杆端释放模型
-│   └── effective_length.py               # 计算长度模型
+│   ├── effective_length.py               # 计算长度模型
+│   ├── load_combination.py               # 基础荷载组合
+│   └── load_combination_enhanced.py      # 增强荷载组合引擎 🆕
 ├── boundary-condition/                   # 边界条件子技能 ✅
 │   ├── intent.md                         # 意图定义
 │   └── runtime.py                        # 运行时实现
@@ -46,8 +48,22 @@ load-boundary/
 ├── seismic-load/                         # 地震荷载子技能 ✅
 │   ├── intent.md                         # 意图定义
 │   └── runtime.py                        # 运行时实现
+├── load-combination/                     # 荷载组合子技能 🆕
+│   ├── intent.md                         # 意图定义
+│   └── runtime.py                        # 运行时实现
+├── crane-load/                           # 吊车荷载子技能 ✅
+│   ├── intent.md                         # 意图定义
+│   └── runtime.py                        # 运行时实现
+├── snow-load/                            # 雪荷载子技能 ✅
+│   ├── intent.md                         # 意图定义
+│   └── runtime.py                        # 运行时实现
+├── temperature-load/                     # 温度荷载子技能 🚧
+│   ├── intent.md                         # 意图定义
+│   └── runtime.py                        # 运行时实现
 └── verification/                         # 验证测试
-    └── .gitkeep
+    ├── test_dead_load.py                 # 恒载测试
+    ├── example_usage.py                  # 综合示例
+    └── test_load_combination_simple.py   # 荷载组合测试 🆕
 ```
 
 ---
@@ -825,15 +841,133 @@ Mapping between V2 Schema and OpenSeesPy/PKPM API is documented in:
   - [x] 节点约束 (固定、铰接、滚动)
   - [x] 杆端释放
   - [x] 计算长度
+- [x] 荷载组合子技能 (load-combination) 🆕
+  - [x] 意图定义 (intent.md)
+  - [x] 运行时实现 (runtime.py)
+  - [x] ULS 组合 (承载能力极限状态)
+  - [x] SLS 组合 (正常使用极限状态)
+  - [x] 地震组合
+  - [x] 工况展开 (活1~活4, 吊1~吊8等)
+  - [x] 自定义组合系数
+  - [x] 特殊构件组合 (抗风柱)
+- [x] 吊车荷载子技能 (crane-load) 🆕
+  - [x] 意图定义 (intent.md)
+  - [x] 运行时实现 (runtime.py)
+- [x] 雪荷载子技能 (snow-load) 🆕
+  - [x] 意图定义 (intent.md)
+  - [x] 运行时实现 (runtime.py)
 
 ### 待开发 / Pending 📋
 - [ ] 更多验证测试用例 (live-load, wind-load, seismic-load, boundary-condition)
 - [ ] 与分析引擎的集成测试
 - [ ] 多语言支持 (i18n)
 - [ ] 用户交互问题生成
-- [ ] 荷载组合子技能 (load-combination)
-- [ ] 温度荷载子技能 (temperature-load)
+- [ ] 温度荷载子技能 (temperature-load) - 已有框架文件
 - [ ] 施工荷载子技能 (construction-load)
+
+---
+
+### 7. Load Combination (荷载组合) 🆕
+
+**目录**: `load-combination/`
+
+**功能**:
+- 根据规范自动生成荷载组合 (ULS, SLS, 地震组合)
+- 支持工况展开 (活1~活4, 吊1~吊8, 左风右风, 左震右震)
+- 支持自定义组合系数
+- 支持特殊构件组合 (抗风柱等)
+- 基于 GB50009-2012 和 GB50011-2010 规范
+
+**使用示例**:
+
+```python
+from load_combination.runtime import generate_load_combinations
+
+# 生成承载能力极限状态组合 (ULS)
+result = generate_load_combinations({
+    "load_cases": {
+        "dead_load": ["LC_DE"],
+        "live_load": ["LC_LL"],
+        "wind_load": ["LC_WX"]
+    },
+    "combination_type": "uls"
+})
+
+# 生成包含地震的所有组合
+result = generate_load_combinations({
+    "load_cases": {
+        "dead_load": ["LC_DE"],
+        "live_load": ["LC_LL"],
+        "seismic_load": ["LC_EX"]
+    },
+    "combination_type": "all"
+})
+
+# 展开工况并生成组合
+result = generate_load_combinations({
+    "load_cases": {
+        "dead_load": ["LC_DE"],
+        "live_load": ["LC_LL"],
+        "wind_load": ["LC_WX"]
+    },
+    "combination_type": "uls",
+    "expand_cases": True  # 展开: 活1~活4, 左风右风等
+})
+
+# 自定义组合系数
+result = generate_load_combinations({
+    "load_cases": {
+        "dead_load": ["LC_DE"],
+        "live_load": ["LC_LL"]
+    },
+    "combination_factors": {
+        "gamma_g": 1.35,  # 恒载分项系数
+        "gamma_q": 1.4    # 活载分项系数
+    }
+})
+```
+
+**支持的组合类型**:
+
+| 组合类型 | 说明 | 规范依据 |
+|---------|------|---------|
+| ULS | 承载能力极限状态 | GB50009-2012 3.2.4 |
+| SLS | 正常使用极限状态 | GB50009-2012 3.2.3 |
+| Seismic | 地震作用组合 | GB50011-2010 5.4.1 |
+
+**默认组合系数** (可自定义):
+
+| 系数 | 说明 | 默认值 |
+|------|------|--------|
+| γ_G | 恒载分项系数 (不利) | 1.2 |
+| γ_G | 恒载分项系数 (有利) | 1.0 |
+| γ_Q | 活载分项系数 | 1.5 |
+| γ_W | 风载分项系数 | 1.4 |
+| γ_EH | 水平地震作用分项系数 | 1.3 |
+| γ_EV | 竖向地震作用分项系数 | 0.5 |
+| ψ_Live | 活载组合值系数 | 0.7 |
+| ψ_Wind | 风载组合值系数 | 0.6 |
+| ψ_Crane | 吊车组合值系数 | 0.7 |
+| ψ_Temp | 温度荷载组合值系数 | 0.6 |
+| ψ_Seismic | 地震组合时活载代表值系数 | 0.5 |
+
+**工况展开规则**:
+
+| 荷载类型 | 展开规则 | 说明 |
+|---------|---------|------|
+| 活荷载 | 活1~活4 | 用于梁的不同活载分布 |
+| 风荷载 | 左风、右风 | 考虑风的不同作用方向 |
+| 地震作用 | 左震、右震 | 考虑地震的不同作用方向 |
+| 吊车荷载 | 吊1~吊8 | 考虑吊车的不同最不利位置 |
+
+**典型组合公式**:
+
+- **活载控制**: 1.3*恒 + 1.5*活
+- **风载控制**: 1.3*恒 + 1.5*风
+- **活+风**: 1.3*恒 + 1.5*活 + 0.6*1.5*风
+- **有吊车**: 1.3*恒 + 0.7*1.5*活 + 1.5*吊
+- **地震**: 1.2*(恒 + 0.5*活) + 1.3*地
+- **SLS**: 1.0*恒 + 1.0*活 + 0.6*1.0*风
 
 ---
 
@@ -851,6 +985,44 @@ python test_dead_load.py
 ```bash
 cd backend/src/agent-skills/load-boundary/verification
 python example_usage.py
+```
+
+### 运行荷载组合测试 / Run Load Combination Tests 🆕
+
+```bash
+cd backend/src/agent-skills/load-boundary/verification
+python test_load_combination_simple.py
+```
+
+**测试覆盖**:
+- [x] ULS 组合生成 (活载控制、风载控制、活+风组合)
+- [x] SLS 组合生成
+- [x] 地震组合生成
+- [x] 工况展开 (活1~活4, 左风右风等)
+- [x] 自定义组合系数
+- [x] 特殊构件组合 (抗风柱)
+- [x] 所有类型组合 (ULS+SLS+Seismic)
+
+**测试结果示例**:
+```
+[Test 1] Basic ULS Combinations
+Status: success
+Total combinations: 8
+ULS combinations: 8
+
+Sample combinations:
+  1. COMB_1: 活载控制: LC_LL
+     Factors: {'LC_DE': 1.2, 'LC_LL': 1.5}
+  2. COMB_2: 活载控制(恒有利): LC_LL
+     Factors: {'LC_DE': 1.0, 'LC_LL': 1.5}
+  3. COMB_3: 风载控制: LC_WX
+     Factors: {'LC_DE': 1.2, 'LC_WX': 1.4}
+[PASS] Test 1 completed
+
+[Test 4] All Combination Types
+Status: success
+Total: 17, ULS: 10, SLS: 5, Seismic: 2
+[PASS] Test 4 completed
 ```
 
 **示例输出**:
