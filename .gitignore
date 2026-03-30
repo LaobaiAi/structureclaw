@@ -39,3 +39,11 @@ uploads/*
 !uploads/.gitkeep
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# AI Editor & Agent configs
+.cursor/
+.kiro/
+
+# Personal archive directories
+Dao-Principles/
+backend/src/agent-skills/load-boundary/archive/
