@@ -107,7 +107,7 @@ export enum LoadTypeEnum {
   DISTRIBUTED_LOAD = 'distributed_load', // 均布荷载
   MOMENT = 'moment',                 // 弯矩
   TORQUE = 'torque',               // 扭矩
-  AXIAL_FORCE = 'axial_force',     // 潴向力
+  AXIAL_FORCE = 'axial_force',     // 轴向力
 }
 
 // 作用元素类型枚举
