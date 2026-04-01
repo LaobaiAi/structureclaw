@@ -1,10 +1,21 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
 import math
+from .constants import (
+    ConstraintType,
+    RollingDirection,
+    get_length_factor,
+    get_restraints_by_constraint_type,
+    get_constraint_description,
+    DEFAULT_STIFFNESS_MATRIX,
+    FULL_RESTRAINTS,
+    TRANSLATIONAL_RESTRAINTS,
+    FREE_RESTRAINTS
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +37,7 @@ class BoundaryConditionGenerator:
 
     def apply_fixed_support(
         self,
-        node_ids: List[str] = None
+        node_ids: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         施加固定支座 (约束所有6个自由度)
@@ -45,18 +56,10 @@ class BoundaryConditionGenerator:
         logger.info(f"Applying fixed supports to {len(node_ids)} nodes")
 
         for node_id in node_ids:
-            self.nodal_constraints[node_id] = {
-                "nodeId": node_id,
-                "constraintType": "fixed",
-                "restrainedDOFs": {
-                    "ux": True,
-                    "uy": True,
-                    "uz": True,
-                    "rx": True,
-                    "ry": True,
-                    "rz": True
-                }
-            }
+            self.nodal_constraints[node_id] = self._create_constraint(
+                node_id=node_id,
+                constraint_type=ConstraintType.FIXED
+            )
 
         return {
             "constraints": self.nodal_constraints,
@@ -65,7 +68,7 @@ class BoundaryConditionGenerator:
 
     def apply_pinned_support(
         self,
-        node_ids: List[str] = None
+        node_ids: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         施加铰支座 (约束3个平动自由度)
@@ -83,18 +86,10 @@ class BoundaryConditionGenerator:
         logger.info(f"Applying pinned supports to {len(node_ids)} nodes")
 
         for node_id in node_ids:
-            self.nodal_constraints[node_id] = {
-                "nodeId": node_id,
-                "constraintType": "pinned",
-                "restrainedDOFs": {
-                    "ux": True,
-                    "uy": True,
-                    "uz": True,
-                    "rx": False,
-                    "ry": False,
-                    "rz": False
-                }
-            }
+            self.nodal_constraints[node_id] = self._create_constraint(
+                node_id=node_id,
+                constraint_type=ConstraintType.PINNED
+            )
 
         return {
             "constraints": self.nodal_constraints,
@@ -116,43 +111,24 @@ class BoundaryConditionGenerator:
         Returns:
             节点约束字典
         """
+        # 验证滚动方向
+        if rolling_direction not in ['x', 'y', 'z']:
+            raise ValueError(
+                f"无效的滚动方向: {rolling_direction}. "
+                f"有效值为: ['x', 'y', 'z']"
+            )
+
+        # 转换为枚举类型
+        direction_enum = RollingDirection(rolling_direction)
+
         logger.info(f"Applying rolling supports to {len(node_ids)} nodes, direction={rolling_direction}")
 
         for node_id in node_ids:
-            # 根据滚动方向设置约束
-            if rolling_direction == 'x':
-                restrained_dofs = {
-                    "ux": False,  # X方向自由滚动
-                    "uy": True,
-                    "uz": True,
-                    "rx": False,
-                    "ry": False,
-                    "rz": False
-                }
-            elif rolling_direction == 'y':
-                restrained_dofs = {
-                    "ux": True,
-                    "uy": False,  # Y方向自由滚动
-                    "uz": True,
-                    "rx": False,
-                    "ry": False,
-                    "rz": False
-                }
-            else:
-                restrained_dofs = {
-                    "ux": True,
-                    "uy": True,
-                    "uz": False,  # Z方向自由滚动
-                    "rx": False,
-                    "ry": False,
-                    "rz": False
-                }
-
-            self.nodal_constraints[node_id] = {
-                "node_id": node_id,
-                "constraint_type": "rolling",
-                "restrained_dofs": restrained_dofs
-            }
+            self.nodal_constraints[node_id] = self._create_constraint(
+                node_id=node_id,
+                constraint_type=ConstraintType.ROLLING,
+                rolling_direction=direction_enum
+            )
 
         return {
             "constraints": self.nodal_constraints,
@@ -161,8 +137,8 @@ class BoundaryConditionGenerator:
 
     def apply_elastic_support(
         self,
-        node_ids: List[str] = None,
-        stiffness_matrix: Dict[str, Any] = None
+        node_ids: Optional[List[str]] = None,
+        stiffness_matrix: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         施加弹性支座 (提供刚度约束)
@@ -180,21 +156,16 @@ class BoundaryConditionGenerator:
 
         # 默认刚度矩阵 (对角矩阵)
         if stiffness_matrix is None:
-            stiffness_matrix = {
-                'kxx': 1e6, 'kyy': 1e6, 'kzz': 1e6,
-                'kxx_rot': 1e5, 'kyy_rot': 1e5, 'kzz_rot': 1e5
-            }
+            stiffness_matrix = DEFAULT_STIFFNESS_MATRIX.copy()
 
         logger.info(f"Applying elastic supports to {len(node_ids)} nodes")
 
         for node_id in node_ids:
-            self.nodal_constraints[node_id] = {
-                "node_id": node_id,
-                "constraint_type": "elastic",
-                "restraints": [False, False, False, False, False, False],  # V2 Schema 格式
-                "stiffness": stiffness_matrix,
-                "extra": {}
-            }
+            self.nodal_constraints[node_id] = self._create_constraint(
+                node_id=node_id,
+                constraint_type=ConstraintType.ELASTIC,
+                stiffness_matrix=stiffness_matrix
+            )
 
         return {
             "constraints": self.nodal_constraints,
@@ -424,6 +395,74 @@ class BoundaryConditionGenerator:
         """获取所有计算长度"""
         return self.effective_lengths
 
+    def _create_constraint(
+        self,
+        node_id: str,
+        constraint_type: ConstraintType,
+        rolling_direction: Optional[RollingDirection] = None,
+        stiffness_matrix: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        创建节点约束 - 统一 V2 Schema 格式
+
+        Args:
+            node_id: 节点ID
+            constraint_type: 约束类型
+            rolling_direction: 滚动方向 (仅对滚动支座)
+            stiffness_matrix: 刚度矩阵 (仅对弹性支座)
+
+        Returns:
+            约束字典 (V2 Schema 格式)
+
+        Examples:
+            >>> # 固定约束
+            >>> constraint = generator._create_constraint(
+            ...     "N1", ConstraintType.FIXED
+            ... )
+            >>> constraint["restraints"]
+            [True, True, True, True, True, True]
+
+            >>> # 铰接约束
+            >>> constraint = generator._create_constraint(
+            ...     "N2", ConstraintType.PINNED
+            ... )
+            >>> constraint["restraints"]
+            [True, True, True, False, False, False]
+
+            >>> # 滚动约束
+            >>> constraint = generator._create_constraint(
+            ...     "N3", ConstraintType.ROLLING,
+            ...     rolling_direction=RollingDirection.X
+            ... )
+            >>> constraint["restraints"]
+            [False, True, True, False, False, False]
+        """
+        # 获取约束数组 (V2 格式: [ux, uy, uz, rx, ry, rz])
+        restraints = get_restraints_by_constraint_type(
+            constraint_type, rolling_direction
+        )
+
+        # 创建基础约束字典
+        constraint = {
+            "nodeId": node_id,
+            "restraints": restraints,  # V2 Schema 格式
+            "extra": {
+                "constraintType": constraint_type.value,
+                "description": get_constraint_description(constraint_type),
+                "timestamp": None  # 可选：添加时间戳
+            }
+        }
+
+        # 添加滚动方向 (仅对滚动支座)
+        if constraint_type == ConstraintType.ROLLING and rolling_direction:
+            constraint["extra"]["rollingDirection"] = rolling_direction.value
+
+        # 添加刚度矩阵 (仅对弹性支座)
+        if constraint_type == ConstraintType.ELASTIC and stiffness_matrix:
+            constraint["stiffness"] = stiffness_matrix
+
+        return constraint
+
     def _calculate_member_length(self, member_id: str) -> float:
         """
         计算杆件几何长度
@@ -466,7 +505,7 @@ class BoundaryConditionGenerator:
 
     def _determine_column_length_factor(self, member_id: str, end: str) -> float:
         """
-        确定柱的计算长度系数 (简化版)
+        确定柱的计算长度系数
 
         Args:
             member_id: 杆件ID
@@ -474,8 +513,16 @@ class BoundaryConditionGenerator:
 
         Returns:
             长度系数
+
+        Examples:
+            >>> # 固定端返回 0.5
+            >>> generator._determine_column_length_factor("C1", "i")
+            0.5
+            >>> # 铰接端返回 0.7
+            >>> generator._determine_column_length_factor("C1", "j")
+            0.7
         """
-        # 简化处理: 检查节点是否有约束
+        # 检查节点是否有约束
         elem = None
         for e in self.model.elements:
             if e.id == member_id:
@@ -483,6 +530,7 @@ class BoundaryConditionGenerator:
                 break
 
         if not elem:
+            logger.warning(f"Element '{member_id}' not found, using default length factor 1.0")
             return 1.0
 
         node_id = elem.nodes[0] if end == 'i' else elem.nodes[1]
@@ -491,13 +539,20 @@ class BoundaryConditionGenerator:
         constraint = self.nodal_constraints.get(node_id)
 
         if constraint:
-            if constraint["constraintType"] == "fixed":
-                return 0.5  # 固定端
-            elif constraint["constraintType"] == "pinned":
-                return 0.7  # 铰接端
+            # 从约束中提取 constraintType
+            constraint_type = constraint.get("constraintType")
+            if constraint_type:
+                try:
+                    # 使用常量函数获取长度系数
+                    return get_length_factor(constraint_type)
+                except ValueError as e:
+                    logger.warning(f"Invalid constraint type for node {node_id}: {e}, using default 1.0")
+                    return 1.0
             else:
-                return 1.0  # 其他
+                logger.warning(f"Node {node_id} constraint missing 'constraintType', using default 1.0")
+                return 1.0
         else:
+            logger.debug(f"Node {node_id} has no constraint, using default length factor 1.0")
             return 1.0  # 无约束
 
 

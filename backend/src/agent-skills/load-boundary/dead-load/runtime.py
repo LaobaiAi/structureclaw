@@ -1,27 +1,26 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
+from .constants import (
+    MATERIAL_DENSITIES,
+    LINEAR_LOAD_CONVERSION,
+    LoadDirection,
+    LoadType,
+    LoadCaseID,
+    ElementType,
+    get_material_density,
+    validate_load_value,
+    validate_element_type
+)
 
 logger = logging.getLogger(__name__)
 
 
 class DeadLoadGenerator:
     """恒载生成器 / Dead Load Generator"""
-
-    # 材料密度数据库 (kg/m³)
-    MATERIAL_DENSITIES = {
-        'concrete': 2500,    # 混凝土
-        'steel': 7850,       # 钢材
-        'aluminum': 2700,    # 铝材
-        'wood': 600,         # 木材
-        'composite': 1800,   # 复合材料
-    }
-
-    # 单位换算系数
-    DENSITY_TO_LOAD = 9.81  # kg/m³ * g = kN/m³
 
     def __init__(self, model: StructureModelV2):
         """
@@ -104,7 +103,7 @@ class DeadLoadGenerator:
         element_id: str,
         element_type: str,
         load_value: float,
-        load_direction: Dict[str, float] = None,
+        load_direction: Optional[Dict[str, float]] = None,
         case_id: str = "LC_DE",
         case_name: str = "恒载工况"
     ) -> Dict[str, Any]:
@@ -121,9 +120,28 @@ class DeadLoadGenerator:
 
         Returns:
             荷载动作
+
+        Raises:
+            ValueError: 当输入参数无效时
+
+        Examples:
+            >>> generator.add_uniform_dead_load(
+            ...     element_id="B1",
+            ...     element_type="beam",
+            ...     load_value=10.5
+            ... )
         """
+        # 参数验证
+        self._validate_parameters(
+            element_id=element_id,
+            element_type=element_type,
+            load_value=load_value,
+            load_direction=load_direction
+        )
+
+        # 设置默认荷载方向（重力方向）
         if load_direction is None:
-            load_direction = {"x": 0.0, "y": -1.0, "z": 0.0}  # 默认向下
+            load_direction = LoadDirection.GRAVITY
 
         load_action = {
             "actionId": f"LA_{element_id}_DE",
@@ -157,7 +175,7 @@ class DeadLoadGenerator:
         element_type: str,
         load_value: float,
         position: Dict[str, float],
-        load_direction: Dict[str, float] = None,
+        load_direction: Optional[Dict[str, float]] = None,
         case_id: str = "LC_DE"
     ) -> Dict[str, Any]:
         """
@@ -173,9 +191,21 @@ class DeadLoadGenerator:
 
         Returns:
             荷载动作
+
+        Raises:
+            ValueError: 当输入参数无效时
         """
+        # 参数验证
+        self._validate_parameters(
+            element_id=element_id,
+            element_type=element_type,
+            load_value=load_value,
+            load_direction=load_direction
+        )
+
+        # 设置默认荷载方向（重力方向）
         if load_direction is None:
-            load_direction = {"x": 0.0, "y": -1.0, "z": 0.0}
+            load_direction = LoadDirection.GRAVITY
 
         load_action = {
             "actionId": f"LA_{element_id}_DE_POINT",
@@ -246,8 +276,8 @@ class DeadLoadGenerator:
             return None
 
         # 计算线荷载 (kN/m)
-        # 线荷载 = 密度 * g * 截面积 / 1000 (kg/m³ * m/s² * m² = kN/m)
-        linear_load = density * self.DENSITY_TO_LOAD * area / 1e6  # mm² → m²
+        # 线荷载 = 密度 * g * 截面积 * 转换系数 (kg/m³ * m/s² * mm² = kN/m)
+        linear_load = density * LINEAR_LOAD_CONVERSION * area  # 使用常量
 
         # 创建荷载动作
         load_action = {
@@ -271,25 +301,98 @@ class DeadLoadGenerator:
             section: 截面
 
         Returns:
-            截面面积 (mm²)
+            截面面积 (mm²)，如果无法计算则返回 None
+
+        Examples:
+            >>> # 矩形截面
+            >>> section = type('Section', (), {
+            ...     'type': 'rectangular',
+            ...     'width': 300,
+            ...     'height': 500,
+            ...     'properties': {}
+            ... })()
+            >>> generator._calculate_section_area(section)
+            150000
+
+            >>> # 圆形截面
+            >>> section = type('Section', (), {
+            ...     'type': 'circular',
+            ...     'diameter': 500,
+            ...     'properties': {}
+            ... })()
+            >>> import math
+            >>> generator._calculate_section_area(section) == math.pi * 250 ** 2
+            True
         """
+        import math
+
         if section.type == "rectangular":
             if section.width and section.height:
-                return section.width * section.height
+                return float(section.width * section.height)
         elif section.type == "circular":
             if section.diameter:
-                import math
-                return math.pi * (section.diameter / 2) ** 2
+                return float(math.pi * (section.diameter / 2) ** 2)
         elif section.type == "box":
             if section.width and section.height and section.thickness:
                 # 箱形截面面积 = 2*(width + height)*thickness
-                return 2 * (section.width + section.height) * section.thickness
+                return float(2 * (section.width + section.height) * section.thickness)
 
         # 尝试从 properties 字段获取
-        if "area" in section.properties:
-            return float(section.properties["area"])
+        if hasattr(section, 'properties') and "area" in section.properties:
+            try:
+                return float(section.properties["area"])
+            except (ValueError, TypeError):
+                pass
 
         return None
+
+    def _validate_parameters(
+        self,
+        element_id: str,
+        element_type: str,
+        load_value: float,
+        load_direction: Optional[Dict[str, float]] = None
+    ) -> None:
+        """
+        验证输入参数
+
+        Args:
+            element_id: 单元ID
+            element_type: 单元类型
+            load_value: 荷载值
+            load_direction: 荷载方向向量
+
+        Raises:
+            ValueError: 当参数无效时
+            TypeError: 当参数类型错误时
+        """
+        # 验证 element_id
+        if not element_id or not isinstance(element_id, str):
+            raise TypeError(f"单元ID必须是非空字符串，得到: {type(element_id)}")
+
+        # 验证 element_type
+        validate_element_type(element_type)
+
+        # 验证 load_value
+        validate_load_value(load_value, LoadType.DISTRIBUTED_LOAD)
+
+        # 验证 load_direction
+        if load_direction is not None:
+            if not isinstance(load_direction, dict):
+                raise TypeError(f"荷载方向必须是字典类型，得到: {type(load_direction)}")
+
+            required_keys = ['x', 'y', 'z']
+            if not all(k in load_direction for k in required_keys):
+                raise ValueError(
+                    f"荷载方向必须包含 {required_keys} 键，得到: {list(load_direction.keys())}"
+                )
+
+            # 验证方向向量是数字
+            for key, value in load_direction.items():
+                if not isinstance(value, (int, float)):
+                    raise TypeError(
+                        f"荷载方向的 {key} 值必须是数字类型，得到: {type(value)}"
+                    )
 
 
 def generate_dead_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> Dict[str, Any]:

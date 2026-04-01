@@ -1,9 +1,27 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional, List
+from collections import defaultdict
+from functools import lru_cache
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
+from .constants import (
+    STANDARD_LIVE_LOADS,
+    DEFAULT_WIDTH_BEAM,
+    DEFAULT_WIDTH_SLAB,
+    OutputMode,
+    DEFAULT_OUTPUT_MODE,
+    LoadDirection,
+    LoadType,
+    LoadCaseID,
+    ElementType,
+    TributaryWidthSource,
+    get_standard_live_load,
+    validate_floor_load_type,
+    validate_live_load_value,
+    get_default_tributary_width
+)
 
 logger = logging.getLogger(__name__)
 
@@ -11,29 +29,7 @@ logger = logging.getLogger(__name__)
 class LiveLoadGenerator:
     """活载生成器 / Live Load Generator"""
 
-    # 规范标准活载 (kN/m²)
-    STANDARD_LIVE_LOADS = {
-        'residential': 2.0,      # 住宅
-        'office': 2.0,          # 办公
-        'classroom': 2.5,       # 教室
-        'corridor': 2.5,        # 走廊
-        'stair': 3.5,           # 楼梯
-        'roof': 0.5,            # 上人屋面
-        'roof_uninhabited': 0.5,# 不上人屋面
-        'equipment': 5.0,       # 设备房
-        'storage': 5.0,         # 仓库
-    }
-
-    # 默认受荷宽度（单位：mm）
-    DEFAULT_WIDTH_BEAM = 3000.0    # 梁默认受荷宽度（3m）
-    DEFAULT_WIDTH_SLAB = 1000.0    # 板默认受荷宽度（1m）
-    DEFAULT_WIDTH_GENERAL = 1000.0  # 通用默认宽度
-
-    # 荷载输出模式
-    OUTPUT_MODE_LINEAR = "linear"       # 输出线荷载（kN/m）- 当前默认
-    OUTPUT_MODE_AREA = "area"           # 输出面荷载（kN/m²）- 未来支持
-
-    def __init__(self, model: StructureModelV2, output_mode: str = OUTPUT_MODE_LINEAR):
+    def __init__(self, model: StructureModelV2, output_mode: str = DEFAULT_OUTPUT_MODE):
         """
         初始化活载生成器
 
@@ -42,12 +38,27 @@ class LiveLoadGenerator:
             output_mode: 荷载输出模式
                 - "linear": 输出线荷载（kN/m），与现有分析引擎兼容
                 - "area": 输出面荷载（kN/m²），供后续环节转换
+
+        Raises:
+            ValueError: 当输出模式无效时
         """
+        # 验证输出模式
+        if output_mode not in [OutputMode.LINEAR, OutputMode.AREA]:
+            raise ValueError(
+                f"无效的输出模式: {output_mode}. "
+                f"有效值为: ['{OutputMode.LINEAR}', '{OutputMode.AREA}']"
+            )
+
         self.model: StructureModelV2 = model
         self.load_cases = {}
         self.load_actions = []
         self.output_mode = output_mode
-        self._section_cache: Dict[str, Any] = {}  # 截面缓存
+
+        # 优化：使用更高效的缓存
+        self._section_cache: Dict[str, Any] = {}
+
+        # 优化：预加载常用数据
+        self._story_map = self._build_story_map()
 
     def generate_floor_live_loads(
         self,
@@ -70,7 +81,21 @@ class LiveLoadGenerator:
 
         Returns:
             荷载工况和荷载动作
+
+        Raises:
+            ValueError: 当楼面荷载类型无效时
+
+        Examples:
+            >>> result = generator.generate_floor_live_loads(
+            ...     floor_load_type='office',
+            ...     case_id='LC_LL'
+            ... )
+            >>> result['status']
+            'success'
         """
+        # 参数验证
+        validate_floor_load_type(floor_load_type)
+
         logger.info(f"Generating floor live loads for type: {floor_load_type}")
 
         # 创建荷载工况 - 对齐 V2 Schema
@@ -128,7 +153,7 @@ class LiveLoadGenerator:
         element_id: str,
         element_type: str,
         load_value: float,
-        load_direction: Dict[str, float] = None,
+        load_direction: Optional[Dict[str, float]] = None,
         case_id: str = "LC_LL"
     ) -> Dict[str, Any]:
         """
@@ -143,9 +168,21 @@ class LiveLoadGenerator:
 
         Returns:
             荷载动作
+
+        Raises:
+            ValueError: 当输入参数无效时
         """
+        # 参数验证
+        self._validate_parameters(
+            element_id=element_id,
+            element_type=element_type,
+            load_value=load_value,
+            load_direction=load_direction
+        )
+
+        # 设置默认荷载方向（重力方向）
         if load_direction is None:
-            load_direction = {"x": 0.0, "y": -1.0, "z": 0.0}
+            load_direction = LoadDirection.GRAVITY
 
         load_action = {
             "actionId": f"LA_{element_id}_LL",
@@ -180,15 +217,30 @@ class LiveLoadGenerator:
         """获取所有荷载动作"""
         return self.load_actions
 
-    def _group_elements_by_story(self) -> Dict[str, list]:
-        """按楼层分组构件"""
-        elements_by_story = {}
+    def _build_story_map(self) -> Dict[str, List[Any]]:
+        """
+        构建楼层映射（优化性能）
+
+        预处理：按楼层分组并过滤构件
+
+        Returns:
+            楼层到构件列表的映射
+        """
+        story_map: Dict[str, List[Any]] = defaultdict(list)
         for elem in self.model.elements:
-            story_id = elem.story or "undefined"
-            if story_id not in elements_by_story:
-                elements_by_story[story_id] = []
-            elements_by_story[story_id].append(elem)
-        return elements_by_story
+            if elem.type in [ElementType.BEAM, ElementType.SLAB] and elem.story:
+                story_map[elem.story].append(elem)
+        return story_map
+
+    def _group_elements_by_story(self) -> Dict[str, list]:
+        """
+        按楼层分组构件
+
+        Returns:
+            楼层到构件列表的映射
+        """
+        # 优化：使用预加载的楼层映射
+        return self._story_map
 
     def _create_floor_load_action(
         self,
@@ -317,6 +369,17 @@ class LiveLoadGenerator:
 
         Returns:
             面荷载值 (kN/m²)，如果未找到则返回 None
+
+        Examples:
+            >>> # 模型中有定义
+            >>> load = generator._get_floor_load_from_model(element, "live")
+            >>> load
+            2.5
+
+            >>> # 模型中无定义
+            >>> load = generator._get_floor_load_from_model(element, "live")
+            >>> load
+            None
         """
         # 获取单元所属楼层
         story_id = element.story
@@ -347,9 +410,9 @@ class LiveLoadGenerator:
                     f"Found floor_load: story='{story_id}', "
                     f"type='{load_type}', value={floor_load.value} kN/m²"
                 )
-                return floor_load.value
+                return float(floor_load.value)
 
-        logger.warning(
+        logger.debug(
             f"No floor_load of type '{load_type}' found in story '{story_id}' "
             f"for element '{element.id}'"
         )
@@ -410,16 +473,16 @@ class LiveLoadGenerator:
             return tributary_width, 'geometry'
 
         # 使用默认值并警告
-        if element_type == "beam":
+        if element_type == ElementType.BEAM:
             logger.warning(
                 f"==================================================\n"
                 f"Element '{element.id}' (beam): 受荷宽度无法从模型几何关系计算\n"
-                f"  → 使用默认值: {self.DEFAULT_WIDTH_BEAM/1000.0:.2f}m\n"
+                f"  → 使用默认值: {DEFAULT_WIDTH_BEAM/1000.0:.2f}m\n"
                 f"  → 建议: 确保模型包含完整的楼板布置和梁间距信息\n"
                 f"  → 或者: 手动指定受荷宽度\n"
                 f"=================================================="
             )
-            tributary_width_m = self.DEFAULT_WIDTH_BEAM / 1000.0
+            tributary_width_m = DEFAULT_WIDTH_BEAM / 1000.0
 
         elif element_type == "slab":
             # 板：楼面活载直接作用于板面，使用 1m 作为受荷宽度
@@ -438,6 +501,91 @@ class LiveLoadGenerator:
             tributary_width_m = 1.0
 
         return tributary_width_m, 'default'
+
+    def _validate_parameters(
+        self,
+        element_id: str,
+        element_type: str,
+        load_value: float,
+        load_direction: Optional[Dict[str, float]] = None
+    ) -> None:
+        """
+        验证输入参数
+
+        Args:
+            element_id: 单元ID
+            element_type: 单元类型
+            load_value: 荷载值
+            load_direction: 荷载方向向量
+
+        Raises:
+            ValueError: 当参数无效时
+            TypeError: 当参数类型错误时
+
+        Examples:
+            >>> generator._validate_parameters(
+            ...     element_id="B1",
+            ...     element_type="beam",
+            ...     load_value=2.5
+            ... )
+            >>> # 无异常，验证通过
+
+            >>> generator._validate_parameters(
+            ...     element_id="B1",
+            ...     element_type="beam",
+            ...     load_value=-1.0
+            ... )
+            ValueError: 荷载值不能为负数...
+        """
+        # 验证 element_id
+        if not element_id or not isinstance(element_id, str):
+            raise TypeError(
+                f"单元ID必须是非空字符串，得到: {type(element_id)}"
+            )
+
+        # 验证 element_type
+        valid_types = [
+            ElementType.BEAM,
+            ElementType.SLAB,
+            ElementType.COLUMN,
+            ElementType.WALL,
+            ElementType.TRUSS
+        ]
+        if element_type not in valid_types:
+            raise ValueError(
+                f"无效的单元类型: {element_type}. "
+                f"有效值为: {valid_types}"
+            )
+
+        # 验证 load_value
+        if not isinstance(load_value, (int, float)):
+            raise TypeError(
+                f"荷载值必须是数字类型，得到: {type(load_value)}"
+            )
+        if load_value < 0:
+            raise ValueError(
+                f"荷载值不能为负数，得到: {load_value}"
+            )
+
+        # 验证 load_direction
+        if load_direction is not None:
+            if not isinstance(load_direction, dict):
+                raise TypeError(
+                    f"荷载方向必须是字典类型，得到: {type(load_direction)}"
+                )
+            required_keys = ['x', 'y', 'z']
+            if not all(k in load_direction for k in required_keys):
+                raise ValueError(
+                    f"荷载方向必须包含 {required_keys} 键，"
+                    f"得到: {list(load_direction.keys())}"
+                )
+            # 验证方向向量是数字
+            for key, value in load_direction.items():
+                if not isinstance(value, (int, float)):
+                    raise TypeError(
+                        f"荷载方向的 {key} 值必须是数字类型，"
+                        f"得到: {type(value)}"
+                    )
 
 
 def generate_live_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> Dict[str, Any]:
