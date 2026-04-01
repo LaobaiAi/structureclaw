@@ -400,6 +400,11 @@ def run_all_tests():
     return failed == 0
 
 
+def run_tests() -> bool:
+    """运行所有测试（由 run_all_tests.py 调用）"""
+    return run_all_tests()
+
+
 if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)

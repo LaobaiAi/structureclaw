@@ -108,7 +108,7 @@ def main():
     print(f"\n详细结果 / Detailed Results:")
     print(f"{'-'*60}")
     for result in results:
-        status = "✓ PASS" if result["success"] else "✗ FAIL"
+        status = "[PASS]" if result["success"] else "[FAIL]"
         print(f"{status:10} {result['name']}")
 
     # 返回退出码

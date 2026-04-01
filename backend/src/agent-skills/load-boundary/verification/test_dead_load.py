@@ -144,7 +144,8 @@ def test_point_dead_load():
     return load_action
 
 
-if __name__ == "__main__":
+def run_tests() -> bool:
+    """运行所有测试"""
     print("=" * 60)
     print("Dead Load Sub-Skill Test Suite")
     print("=" * 60)
@@ -155,13 +156,22 @@ if __name__ == "__main__":
         test_point_dead_load()
 
         print("\n" + "=" * 60)
-        print("All tests passed! ✓")
+        print("All tests passed! [PASS]")
         print("=" * 60)
+        return True
     except AssertionError as e:
-        print(f"\n✗ Test failed: {e}")
+        print(f"\n[FAIL] Test failed: {e}")
         import traceback
         traceback.print_exc()
+        return False
     except Exception as e:
-        print(f"\n✗ Error: {e}")
+        print(f"\n[FAIL] Error: {e}")
         import traceback
         traceback.print_exc()
+        return False
+
+
+if __name__ == "__main__":
+    import sys
+    success = run_tests()
+    sys.exit(0 if success else 1)

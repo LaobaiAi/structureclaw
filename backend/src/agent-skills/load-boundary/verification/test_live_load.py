@@ -14,7 +14,9 @@ import sys
 from pathlib import Path
 
 # 添加父目录到路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+current_dir = Path(__file__).parent
+load_boundary_dir = current_dir.parent
+sys.path.insert(0, str(load_boundary_dir))
 
 
 # 模拟类
