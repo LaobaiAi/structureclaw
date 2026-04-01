@@ -24,16 +24,30 @@ class LiveLoadGenerator:
         'storage': 5.0,         # 仓库
     }
 
-    def __init__(self, model: StructureModelV2):
+    # 默认受荷宽度（单位：mm）
+    DEFAULT_WIDTH_BEAM = 3000.0    # 梁默认受荷宽度（3m）
+    DEFAULT_WIDTH_SLAB = 1000.0    # 板默认受荷宽度（1m）
+    DEFAULT_WIDTH_GENERAL = 1000.0  # 通用默认宽度
+
+    # 荷载输出模式
+    OUTPUT_MODE_LINEAR = "linear"       # 输出线荷载（kN/m）- 当前默认
+    OUTPUT_MODE_AREA = "area"           # 输出面荷载（kN/m²）- 未来支持
+
+    def __init__(self, model: StructureModelV2, output_mode: str = OUTPUT_MODE_LINEAR):
         """
         初始化活载生成器
 
         Args:
             model: V2 结构模型
+            output_mode: 荷载输出模式
+                - "linear": 输出线荷载（kN/m），与现有分析引擎兼容
+                - "area": 输出面荷载（kN/m²），供后续环节转换
         """
-        self.model = model
+        self.model: StructureModelV2 = model
         self.load_cases = {}
         self.load_actions = []
+        self.output_mode = output_mode
+        self._section_cache: Dict[str, Any] = {}  # 截面缓存
 
     def generate_floor_live_loads(
         self,
@@ -45,6 +59,9 @@ class LiveLoadGenerator:
         """
         生成楼面活载工况
 
+        优先从结构模型中读取面荷载（model.stories[i].floor_loads），
+        如果模型中没有定义，则使用标准活载值。
+
         Args:
             floor_load_type: 楼面荷载类型 (residential, office, classroom, etc.)
             case_id: 荷载工况ID
@@ -55,9 +72,6 @@ class LiveLoadGenerator:
             荷载工况和荷载动作
         """
         logger.info(f"Generating floor live loads for type: {floor_load_type}")
-
-        # 获取标准活载值
-        load_value = self.STANDARD_LIVE_LOADS.get(floor_load_type, 2.0)
 
         # 创建荷载工况 - 对齐 V2 Schema
         load_case = {
@@ -72,16 +86,34 @@ class LiveLoadGenerator:
 
         for story_id, elements in elements_by_story.items():
             for elem in elements:
-                if elem.type in ["beam", "slab"]:
-                    load_action = self._create_floor_load_action(
-                        element=elem,
-                        load_value=load_value,
-                        case_id=case_id,
-                        floor_type=floor_load_type
+                if elem.type not in ["beam", "slab"]:
+                    continue
+
+                # 优先从模型读取面荷载
+                load_value = self._get_floor_load_from_model(elem, "live")
+
+                # 如果模型中没有定义，使用标准活载值
+                if load_value is None:
+                    load_value = self.STANDARD_LIVE_LOADS.get(floor_load_type, 2.0)
+                    logger.info(
+                        f"Element '{elem.id}' (story '{story_id}'): "
+                        f"Using standard live load {load_value:.2f} kN/m² for '{floor_load_type}'"
                     )
-                    if load_action:
-                        load_case["loads"].append(load_action)
-                        self.load_actions.append(load_action)
+                else:
+                    logger.info(
+                        f"Element '{elem.id}' (story '{story_id}'): "
+                        f"Using live load from model: {load_value:.2f} kN/m²"
+                    )
+
+                load_action = self._create_floor_load_action(
+                    element=elem,
+                    load_value=load_value,
+                    case_id=case_id,
+                    floor_type=floor_load_type
+                )
+                if load_action:
+                    load_case["loads"].append(load_action)
+                    self.load_actions.append(load_action)
 
         self.load_cases[case_id] = load_case
         logger.info(f"Generated {len(load_case['loads'])} live load actions")
@@ -164,9 +196,15 @@ class LiveLoadGenerator:
         load_value: float,
         case_id: str,
         floor_type: str
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """
         创建楼面荷载动作
+
+        支持两种输出模式：
+        1. 线荷载模式（默认）：输出 kN/m，与现有分析引擎兼容
+           转换公式：linear_load = area_load × tributary_width
+        2. 面荷载模式：输出 kN/m²，保留原始面荷载供后续处理
+           未来优化时使用，无需受荷宽度
 
         Args:
             element: 单元
@@ -177,35 +215,229 @@ class LiveLoadGenerator:
         Returns:
             荷载动作字典
         """
-        # 获取截面面积
+        element_type = element.type
+
+        # 面荷载模式：直接输出面荷载，无需转换
+        if self.output_mode == self.OUTPUT_MODE_AREA:
+            load_action = {
+                "actionId": f"LA_{element.id}_LL",
+                "caseId": case_id,
+                "elementType": element_type,
+                "elementId": element.id,
+                "loadType": "distributed_load",
+                "loadValue": load_value,  # kN/m² - 面荷载
+                "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0},
+                "description": f"{floor_type} 活载: {load_value:.3f} kN/m² (面荷载)",
+                "extra": {
+                    "load_unit": "kN/m²",
+                    "load_mode": "area",
+                    "floor_type": floor_type
+                }
+            }
+            logger.debug(
+                f"Element '{element.id}' ({element_type}): "
+                f"area_load={load_value:.3f} kN/m² (面荷载模式)"
+            )
+            return load_action
+
+        # 线荷载模式（默认）：计算受荷宽度并转换为线荷载
+        # 获取截面信息（仅用于警告，不影响计算）
         section = self._get_section(element.section)
         if not section:
             logger.warning(f"Section '{element.section}' not found for element '{element.id}'")
-            return None
+            # 继续处理，但使用默认受荷宽度
 
-        # 简化处理: 将面荷载转换为线荷载
-        # 实际应根据荷载传递路径计算
-        linear_load = load_value  # kN/m
+        # 计算受荷宽度
+        tributary_width, width_source = self._calculate_tributary_width(element)
+
+        # 面荷载转换为线荷载 (kN/m² × m = kN/m)
+        linear_load = load_value * tributary_width
+
+        logger.debug(
+            f"Element '{element.id}' ({element_type}): "
+            f"load_value={load_value:.3f} kN/m², "
+            f"tributary_width={tributary_width:.3f}m (source: {width_source}), "
+            f"linear_load={linear_load:.3f} kN/m"
+        )
 
         load_action = {
             "actionId": f"LA_{element.id}_LL",
             "caseId": case_id,
-            "elementType": element.type,
+            "elementType": element_type,
             "elementId": element.id,
             "loadType": "distributed_load",
-            "loadValue": linear_load,
+            "loadValue": linear_load,  # kN/m - 线荷载
             "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0},
-            "description": f"{floor_type} 活载: {linear_load} kN/m"
+            "description": f"{floor_type} 活载: {load_value:.3f} kN/m² × {tributary_width:.2f}m = {linear_load:.3f} kN/m",
+            "extra": {
+                "area_load": load_value,  # 保留原始面荷载值 (kN/m²)
+                "tributary_width": tributary_width,  # 保留受荷宽度 (m)
+                "tributary_width_source": width_source,  # 'geometry' 或 'default'
+                "calculation": f"{load_value:.3f} × {tributary_width:.3f} = {linear_load:.3f}",
+                "load_unit": "kN/m",
+                "load_mode": "linear",
+                "floor_type": floor_type
+            }
         }
 
         return load_action
 
     def _get_section(self, section_id: str) -> Any:
-        """获取截面"""
+        """
+        获取截面（带缓存）
+
+        Args:
+            section_id: 截面ID
+
+        Returns:
+            截面对象或None
+        """
+        if section_id in self._section_cache:
+            return self._section_cache[section_id]
+
         for sec in self.model.sections:
             if sec.id == section_id:
+                self._section_cache[section_id] = sec
                 return sec
+
+        self._section_cache[section_id] = None
         return None
+
+    def _get_floor_load_from_model(
+        self,
+        element: Any,
+        load_type: str
+    ) -> Optional[float]:
+        """
+        从结构模型中读取楼面荷载
+
+        Args:
+            element: 单元对象
+            load_type: 荷载类型 ("dead" 或 "live")
+
+        Returns:
+            面荷载值 (kN/m²)，如果未找到则返回 None
+        """
+        # 获取单元所属楼层
+        story_id = element.story
+        if not story_id:
+            logger.warning(
+                f"Element '{element.id}' has no story_id assigned. "
+                f"Cannot retrieve floor load from model."
+            )
+            return None
+
+        # 在 stories 列表中查找对应的楼层
+        story = None
+        for s in self.model.stories:
+            if s.id == story_id:
+                story = s
+                break
+
+        if not story:
+            logger.warning(
+                f"Story '{story_id}' not found in model.stories for element '{element.id}'"
+            )
+            return None
+
+        # 查找指定类型的楼面荷载
+        for floor_load in story.floor_loads:
+            if floor_load.type == load_type:
+                logger.debug(
+                    f"Found floor_load: story='{story_id}', "
+                    f"type='{load_type}', value={floor_load.value} kN/m²"
+                )
+                return floor_load.value
+
+        logger.warning(
+            f"No floor_load of type '{load_type}' found in story '{story_id}' "
+            f"for element '{element.id}'"
+        )
+        return None
+
+    def _calculate_tributary_width_from_geometry(
+        self,
+        element: Any
+    ) -> Optional[float]:
+        """
+        从结构模型的几何关系计算受荷宽度
+
+        受荷宽度应该根据梁的间距、楼板布置等几何关系计算。
+        这需要分析相邻梁的位置关系。
+
+        Args:
+            element: 单元对象
+
+        Returns:
+            受荷宽度（米），如果无法计算则返回 None
+        """
+        # TODO: 实现基于几何关系的受荷宽度计算
+        # 需要分析：
+        # 1. 梁的相邻平行梁的间距
+        # 2. 楼板布置（单向板/双向板）
+        # 3. 梁的相对位置（边梁/中间梁）
+
+        # 目前返回 None，表示无法从几何关系计算
+        return None
+
+    def _calculate_tributary_width(
+        self,
+        element: Any
+    ) -> tuple[float, str]:
+        """
+        计算构件受荷宽度
+
+        优先级：
+        1. 从模型几何关系计算（梁间距等）
+        2. 使用默认值（并给出警告）
+
+        Args:
+            element: 单元对象
+
+        Returns:
+            (受荷宽度（米）, 来源标识)
+            来源标识：'geometry' | 'default'
+        """
+        element_type = element.type
+
+        # 尝试从几何关系计算
+        tributary_width = self._calculate_tributary_width_from_geometry(element)
+        if tributary_width is not None:
+            logger.debug(
+                f"Element '{element.id}' ({element_type}): "
+                f"tributary_width={tributary_width:.3f}m (from geometry)"
+            )
+            return tributary_width, 'geometry'
+
+        # 使用默认值并警告
+        if element_type == "beam":
+            logger.warning(
+                f"==================================================\n"
+                f"Element '{element.id}' (beam): 受荷宽度无法从模型几何关系计算\n"
+                f"  → 使用默认值: {self.DEFAULT_WIDTH_BEAM/1000.0:.2f}m\n"
+                f"  → 建议: 确保模型包含完整的楼板布置和梁间距信息\n"
+                f"  → 或者: 手动指定受荷宽度\n"
+                f"=================================================="
+            )
+            tributary_width_m = self.DEFAULT_WIDTH_BEAM / 1000.0
+
+        elif element_type == "slab":
+            # 板：楼面活载直接作用于板面，使用 1m 作为受荷宽度
+            tributary_width_m = 1.0
+            logger.debug(
+                f"Element '{element.id}' (slab): "
+                f"tributary_width={tributary_width_m:.3f}m (面荷载)"
+            )
+
+        else:
+            # 其他类型（柱子、桁架等）不承受楼面活载
+            logger.warning(
+                f"Element '{element.id}' type '{element_type}' "
+                f"not typically subjected to floor live loads, using 1.0m"
+            )
+            tributary_width_m = 1.0
+
+        return tributary_width_m, 'default'
 
 
 def generate_live_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> Dict[str, Any]:
@@ -219,13 +451,17 @@ def generate_live_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> 
             - case_name: 荷载工况名称 (可选)
             - floor_load_type: 楼面荷载类型 (默认 office)
             - custom_loads: 自定义荷载列表 (可选)
+            - output_mode: 荷载输出模式 (可选，默认 "linear")
+                * "linear": 输出线荷载（kN/m），与现有分析引擎兼容
+                * "area": 输出面荷载（kN/m²），供后续环节转换
 
     Returns:
         生成结果
     """
-    generator = LiveLoadGenerator(model)
-
     # 参数解析
+    output_mode = parameters.get("output_mode", "linear")
+    generator = LiveLoadGenerator(model, output_mode=output_mode)
+
     case_id = parameters.get("case_id", "LC_LL")
     case_name = parameters.get("case_name", "活载工况")
     description = parameters.get("description", "楼面活载")
@@ -258,6 +494,7 @@ def generate_live_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> 
             "case_count": len(generator.get_load_cases()),
             "action_count": len(generator.get_load_actions()),
             "case_id": case_id,
+            "output_mode": output_mode  # 添加输出模式到摘要
             "floor_type": floor_load_type
         }
     }
