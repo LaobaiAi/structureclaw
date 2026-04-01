@@ -490,7 +490,7 @@ def apply_boundary_conditions(model: StructureModelV2, parameters: Dict[str, Any
     elif support_type == "pinned":
         generator.apply_pinned_support(node_ids)
     elif support_type == "roller":
-        generator.apply_roller_support(node_ids, roller_direction)
+        generator.apply_rolling_support(node_ids, roller_direction)
 
     # 施加杆端释放
     if apply_hinged_ends:
