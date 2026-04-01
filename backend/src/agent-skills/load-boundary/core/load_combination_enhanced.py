@@ -721,26 +721,26 @@ class LoadCombinationGenerator:
                 # 为每个自定义活载生成主控组合
                 for i, custom_id in enumerate(custom_load_ids):
                     factors = {}
-                    
+
                     # 主控自定义荷载
-                    factors[custom_id] = 1.5
-                    
+                    factors[custom_id] = self.factors.gamma_q
+
                     # 其他活载作为组合值
                     for j, other_id in enumerate(custom_load_ids):
                         if j != i:
-                            factors[other_id] = 0.7
-                    
+                            factors[other_id] = self.factors.psi_live
+
                     # 加入原组合的恒载等
                     factors.update({
                         k: v for k, v in base_combo["factors"].items()
                         if k not in custom_load_ids
                     })
-                    
+
                     new_combo = base_combo.copy()
                     new_combo["id"] = self._get_next_combination_id()
                     new_combo["description"] = f"{custom_id}主控组合"
                     new_combo["factors"] = factors
-                    
+
                     result_combinations.append(new_combo)
         
         else:
