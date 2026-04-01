@@ -65,7 +65,7 @@ def generate_load_combinations(params: Dict[str, Any]) -> Dict[str, Any]:
                     for case_id in case_ids:
                         internal_load_cases[case_id] = {
                             "id": case_id,
-                            "type": case_type.replace("_load", "_load").replace("_", "_"),
+                            "type": case_type.replace("_load", ""),
                             "description": f"{case_type} {case_id}",
                             "extra": {}
                         }
