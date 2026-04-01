@@ -109,6 +109,9 @@ class SnowLoadGenerator:
         """
         计算雪荷载
 
+        注意：雪荷载作用于楼板（slab）时，使用面荷载单位（kN/m²）。
+        对于板单元，面荷载是合适的表示方式。
+
         Args:
             element: 构件对象
             snow_load: 设计雪荷载 (kN/m²)
@@ -116,17 +119,19 @@ class SnowLoadGenerator:
         Returns:
             荷载动作字典
         """
-        # 简化：均布荷载作用于楼板
+        # 雪荷载以面荷载形式作用于楼板
+        # 对于板单元（slab），面荷载 kN/m² 是合适的单位
         return {
             "id": f"SNOW_{element.id}",
             "case_id": "LC_SNOW",
             "element_type": element.type,
             "element_id": element.id,
-            "load_type": "distributed_load",  # 均布荷载
-            "load_value": snow_load,
+            "load_type": "distributed_load",  # 面荷载（对板单元）
+            "load_value": snow_load,  # kN/m² - 面荷载单位
             "load_direction": {"x": 0.0, "y": 0.0, "z": -1.0},  # 向下
             "extra": {
                 "snow_load": snow_load,
-                "distribution_type": "uniform"
+                "distribution_type": "uniform",
+                "load_unit": "kN/m²"  # 明确标注单位为面荷载
             }
         }
