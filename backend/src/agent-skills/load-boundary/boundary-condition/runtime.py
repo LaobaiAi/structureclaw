@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +414,7 @@ class BoundaryConditionGenerator:
             return None
 
         # 计算距离
-        import math
+        
         dx = node_j.x - node_i.x
         dy = node_j.y - node_i.y
         dz = node_j.z - node_i.z
