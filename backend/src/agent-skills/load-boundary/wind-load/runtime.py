@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from datetime import datetime
 
-from structure_protocol.structure_model_v2 import StructureModelV2
+from structure_protocol.structure_model_v2 import StructureModelV2, SectionV2
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,12 @@ class WindLoadGenerator:
         'C': {'alpha': 0.22, 'gradient_height': 450},
         'D': {'alpha': 0.30, 'gradient_height': 550},
     }
+    
+    # 默认受风宽度（单位：mm）
+    DEFAULT_WIDTH_COLUMN = 500.0  # 柱子默认宽度
+    DEFAULT_WIDTH_BEAM = 600.0    # 梁默认高度
+    DEFAULT_WIDTH_TRUSS = 200.0   # 桁架默认尺寸
+    DEFAULT_WIDTH_GENERAL = 1000.0  # 通用默认宽度
 
     def __init__(self, model: StructureModelV2):
         """
@@ -26,9 +33,12 @@ class WindLoadGenerator:
         Args:
             model: V2 结构模型
         """
-        self.model = model
-        self.load_cases = {}
-        self.load_actions = []
+        self.model: StructureModelV2 = model
+        self.load_cases: Dict[str, Any] = {}
+        self.load_actions: List[Dict[str, Any]] = []
+        self._section_cache: Dict[str, Optional[SectionV2]] = {}  # 截面缓存，提高查询效率
+        self.warnings: List[Dict[str, Any]] = []  # 存储计算过程中的警告信息
+        self._warnings_by_element: Dict[str, str] = {}  # 按单元ID索引的警告缓存
 
     def generate_wind_loads(
         self,
@@ -94,13 +104,20 @@ class WindLoadGenerator:
                 if load_action:
                     load_case["loads"].append(load_action)
                     self.load_actions.append(load_action)
+                    
+        # 优化警告查询：创建按单元ID索引的警告缓存
+        for warning in self.warnings:
+            element_id = warning.get("element_id")
+            if element_id:
+                self._warnings_by_element[element_id] = warning["message"]
 
         self.load_cases[case_id] = load_case
         logger.info(f"Generated {len(load_case['loads'])} wind load actions")
 
         return {
             "load_case": load_case,
-            "load_actions": self.load_actions
+            "load_actions": self.load_actions,
+            "warnings": self.warnings  # 添加警告信息
         }
 
     def add_custom_wind_load(
@@ -235,6 +252,141 @@ class WindLoadGenerator:
 
         return min(mu_z, 2.0)  # 不超过 2.0
 
+    def _get_section(self, section_id: str) -> Optional[SectionV2]:
+        """
+        从模型中获取截面定义（带缓存）
+        
+        Args:
+            section_id: 截面ID
+            
+        Returns:
+            截面对象或None
+        """
+        if section_id in self._section_cache:
+            return self._section_cache[section_id]
+            
+        for sec in self.model.sections:
+            if sec.id == section_id:
+                self._section_cache[section_id] = sec
+                return sec
+                
+        self._section_cache[section_id] = None
+        return None
+
+    def _calculate_wind_width(self, element: Any, wind_direction: str) -> float:
+        """
+        计算构件受风宽度（核心改进，考虑风向）
+        
+        Args:
+            element: 单元对象
+            wind_direction: 风向（x, -x, y, -y）
+            
+        Returns:
+            受风宽度（米）
+        """
+        element_type = element.type
+        
+        # 获取截面信息
+        section = self._get_section(element.section)
+        if not section:
+            warning_msg = (
+                f"截面缺失: 单元 '{element.id}' 引用的截面 '{element.section}' 未找到，"
+                f"使用默认受风宽度 1.0m 计算"
+            )
+            logger.warning(warning_msg)
+            self.warnings.append({
+                "type": "section_not_found",
+                "element_id": element.id,
+                "section_id": element.section,
+                "message": warning_msg,
+                "default_width": 1.0,
+                "timestamp": datetime.now().isoformat(),
+                "story_id": element.story
+            })
+            return 1.0
+        
+        # 根据构件类型确定受风宽度
+        if element_type == "column":
+            # 柱子：根据风向决定受力面
+            # X向风（-x/x）：作用在柱子的高度方向（截面高度）
+            # Y向风（-y/y）：作用在柱子的宽度方向（截面宽度）
+            if wind_direction in ['x', '-x']:
+                wind_width_mm = section.height if section.height is not None else 500.0
+                face_description = "高度方向"
+            else:
+                wind_width_mm = section.width if section.width is not None else 500.0
+                face_description = "宽度方向"
+            
+            wind_width_m = wind_width_mm / 1000.0
+            logger.debug(
+                f"Element '{element.id}' (column): {face_description}受力，"
+                f"section={'height=' + str(section.height) if wind_direction in ['x', '-x'] else 'width=' + str(section.width)}mm, "
+                f"wind_width={wind_width_m:.3f}m"
+            )
+            return wind_width_m
+            
+        elif element_type == "beam":
+            # 梁：高度方向受力（梁侧面受风）
+            # 明确处理None和0的情况
+            if section.height is not None:
+                wind_width_mm = section.height
+            elif section.width is not None:
+                wind_width_mm = section.width
+            else:
+                wind_width_mm = 600.0  # 默认600mm
+            
+            wind_width_m = wind_width_mm / 1000.0
+            logger.debug(
+                f"Element '{element.id}' (beam): 侧面受风，"
+                f"section.height={section.height}mm, "
+                f"wind_width={wind_width_m:.3f}m"
+            )
+            return wind_width_m
+            
+        elif element_type == "truss":
+            # 桁架：支持多种截面类型
+            if section.type == "box" and section.thickness is not None:
+                # 箱型截面：使用壁厚
+                wind_width_mm = section.thickness * 2  # 两侧壁厚
+                logger.debug(f"Element '{element.id}' (truss, box): thickness={section.thickness}mm")
+            elif section.diameter is not None:
+                # 圆形截面：使用直径
+                wind_width_mm = section.diameter
+                logger.debug(f"Element '{element.id}' (truss, circular): diameter={section.diameter}mm")
+            elif section.height is not None:
+                # 矩形截面：使用高度
+                wind_width_mm = section.height
+                logger.debug(f"Element '{element.id}' (truss, rectangular): height={section.height}mm")
+            else:
+                wind_width_mm = 200.0  # 默认200mm
+            
+            wind_width_m = wind_width_mm / 1000.0
+            logger.debug(f"Element '{element.id}' (truss): wind_width={wind_width_m:.3f}m")
+            return wind_width_m
+        
+        elif element_type in ["wall", "shell", "slab"]:
+            # 面单元：直接返回1.0m，后续会处理为面荷载
+            logger.debug(f"Element '{element.id}' ({element_type}): 面单元，将使用面荷载")
+            return 1.0
+        
+        else:
+            # 其他类型默认1.0m
+            warning_msg = (
+                f"默认宽度: 单元 '{element.id}' 类型 '{element_type}' 未定义受风宽度计算规则，"
+                f"使用默认受风宽度 1.0m 计算"
+            )
+            logger.warning(warning_msg)
+            self.warnings.append({
+                "type": "unsupported_element_type",
+                "element_id": element.id,
+                "element_type": element_type,
+                "message": warning_msg,
+                "default_width": 1.0,
+                "timestamp": datetime.now().isoformat(),
+                "story_id": element.story
+            })
+            return 1.0
+
     def _create_wind_load_action(
         self,
         element: Any,
@@ -266,9 +418,24 @@ class WindLoadGenerator:
         else:
             load_direction = {"x": 0.0, "y": 0.0, "z": 0.0}
 
-        # 简化处理: 将面风压转换为线荷载
-        linear_load = wind_pressure  # kN/m
+        # 核心改进: 基于截面尺寸计算受风宽度（考虑风向）
+        wind_width = self._calculate_wind_width(element, wind_direction)
+        
+        # 面风压 → 线荷载转换 (kN/m² × m = kN/m)
+        linear_load = wind_pressure * wind_width
+        
+        logger.debug(
+            f"Element '{element.id}' ({element.type}): "
+            f"wind_pressure={wind_pressure:.3f} kN/m², "
+            f"wind_width={wind_width:.3f}m, "
+            f"linear_load={linear_load:.3f} kN/m"
+        )
 
+        # 检查是否有针对此单元的警告（使用优化后的缓存）
+        warning_notes = ""
+        if element.id in self._warnings_by_element:
+            warning_notes = f" [注意: {self._warnings_by_element[element.id]}]"
+        
         load_action = {
             "actionId": f"LA_{element.id}_W",
             "caseId": case_id,
@@ -277,7 +444,7 @@ class WindLoadGenerator:
             "loadType": "distributed_load",
             "loadValue": linear_load,
             "loadDirection": load_direction,
-            "description": f"风载: {wind_pressure:.3f} kN/m, 方向: {wind_direction}"
+            "description": f"风载: {wind_pressure:.3f} kN/m² × {wind_width:.2f}m = {linear_load:.3f} kN/m, 方向: {wind_direction}{warning_notes}"
         }
 
         return load_action
@@ -337,9 +504,11 @@ def generate_wind_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> 
         "status": "success",
         "load_cases": generator.get_load_cases(),
         "load_actions": generator.get_load_actions(),
+        "warnings": generator.warnings,  # 添加警告信息
         "summary": {
             "case_count": len(generator.get_load_cases()),
             "action_count": len(generator.get_load_actions()),
+            "warning_count": len(generator.warnings),  # 添加警告数量统计
             "case_id": case_id,
             "basic_pressure": basic_pressure,
             "wind_direction": wind_direction
