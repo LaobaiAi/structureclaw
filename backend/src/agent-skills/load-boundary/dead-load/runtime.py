@@ -15,6 +15,7 @@ from .constants import (
     validate_load_value,
     validate_element_type
 )
+from ..shared.model_data_helper import ModelDataHelper, GeometryHelper
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ class DeadLoadGenerator:
         self.model = model
         self.load_cases = {}
         self.load_actions = []
+
+        # 使用共享数据辅助类
+        self._model_helper = ModelDataHelper(model)
+        self._model_helper.preload_data()
 
     def generate_self_weight_loads(
         self,
@@ -63,14 +68,14 @@ class DeadLoadGenerator:
         # 遍历所有构件，计算自重
         for elem in self.model.elements:
             try:
-                # 获取构件材料
-                material = self._get_material(elem.material)
+                # 获取构件材料（使用共享工具类）
+                material = self._model_helper.get_material(elem.material)
                 if not material:
                     logger.warning(f"Material '{elem.material}' not found for element '{elem.id}'")
                     continue
 
-                # 获取构件截面
-                section = self._get_section(elem.section)
+                # 获取构件截面（使用共享工具类）
+                section = self._model_helper.get_section(elem.section)
                 if not section:
                     logger.warning(f"Section '{elem.section}' not found for element '{elem.id}'")
                     continue
@@ -232,20 +237,6 @@ class DeadLoadGenerator:
         """获取所有荷载动作"""
         return self.load_actions
 
-    def _get_material(self, material_id: str) -> Any:
-        """获取材料"""
-        for mat in self.model.materials:
-            if mat.id == material_id:
-                return mat
-        return None
-
-    def _get_section(self, section_id: str) -> Any:
-        """获取截面"""
-        for sec in self.model.sections:
-            if sec.id == section_id:
-                return sec
-        return None
-
     def _calculate_self_weight(
         self,
         element: Any,
@@ -268,8 +259,8 @@ class DeadLoadGenerator:
         if hasattr(material, 'rho') and material.rho:
             density = material.rho
 
-        # 计算截面面积 (简化处理，实际应根据截面类型计算)
-        area = self._calculate_section_area(section)
+        # 使用共享几何辅助类计算截面面积
+        area = GeometryHelper.calculate_section_area(section)
 
         if area is None or area <= 0:
             logger.warning(f"Cannot calculate area for section '{section.id}'")
@@ -292,59 +283,6 @@ class DeadLoadGenerator:
         }
 
         return load_action
-
-    def _calculate_section_area(self, section: Any) -> float:
-        """
-        计算截面面积 (简化版)
-
-        Args:
-            section: 截面
-
-        Returns:
-            截面面积 (mm²)，如果无法计算则返回 None
-
-        Examples:
-            >>> # 矩形截面
-            >>> section = type('Section', (), {
-            ...     'type': 'rectangular',
-            ...     'width': 300,
-            ...     'height': 500,
-            ...     'properties': {}
-            ... })()
-            >>> generator._calculate_section_area(section)
-            150000
-
-            >>> # 圆形截面
-            >>> section = type('Section', (), {
-            ...     'type': 'circular',
-            ...     'diameter': 500,
-            ...     'properties': {}
-            ... })()
-            >>> import math
-            >>> generator._calculate_section_area(section) == math.pi * 250 ** 2
-            True
-        """
-        import math
-
-        if section.type == "rectangular":
-            if section.width and section.height:
-                return float(section.width * section.height)
-        elif section.type == "circular":
-            if section.diameter:
-                return float(math.pi * (section.diameter / 2) ** 2)
-        elif section.type == "box":
-            if section.width and section.height and section.thickness:
-                # 箱形截面面积 = 2*(width + height)*thickness
-                return float(2 * (section.width + section.height) * section.thickness)
-
-        # 尝试从 properties 字段获取
-        if hasattr(section, 'properties') and "area" in section.properties:
-            try:
-                return float(section.properties["area"])
-            except (ValueError, TypeError):
-                pass
-
-        return None
 
     def _validate_parameters(
         self,

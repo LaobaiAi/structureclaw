@@ -283,7 +283,7 @@ class GeometryHelper:
             ...     print(f"Element length: {length:.2f} m")
         """
         if not hasattr(element, 'nodes') or len(element.nodes) < 2:
-            logger.warning(f"Element '{element.id}' has invalid nodes")
+            logger.warning(f"Element '{getattr(element, 'id', 'unknown')}' has invalid nodes")
             return None
 
         # 获取两端节点
@@ -292,7 +292,7 @@ class GeometryHelper:
 
         if not node_i or not node_j:
             logger.warning(
-                f"Cannot find nodes for element '{element.id}': "
+                f"Cannot find nodes for element '{getattr(element, 'id', 'unknown')}': "
                 f"{element.nodes[0]}, {element.nodes[1]}"
             )
             return None
@@ -366,6 +366,158 @@ class GeometryHelper:
 
         logger.warning(f"Cannot calculate area for section '{getattr(section, 'id', 'unknown')}'")
         return None
+
+    @staticmethod
+    def calculate_tributary_width_from_geometry(
+        element: Any,
+        model: Any,
+        model_helper: ModelDataHelper = None
+    ) -> Optional[float]:
+        """
+        从结构模型的几何关系计算受荷宽度（梁的受荷宽度）
+
+        受荷宽度应该根据梁的间距、楼板布置等几何关系计算。
+        这需要分析相邻梁的位置关系。
+
+        Args:
+            element: 单元对象
+            model: 结构模型
+            model_helper: 模型数据辅助类（可选）
+
+        Returns:
+            受荷宽度（米），如果无法计算则返回 None
+
+        Note:
+            这是一个简化的几何计算，实际应用中可能需要更复杂的楼板分析。
+        """
+        try:
+            import math
+
+            # 检查是否为梁
+            if not hasattr(element, 'type') or element.type != 'beam':
+                return None
+
+            # 获取梁的两端节点
+            if not hasattr(element, 'nodes') or len(element.nodes) < 2:
+                return None
+
+            # 使用模型辅助类获取节点（如果提供）
+            if model_helper:
+                node_i = model_helper.get_node(element.nodes[0])
+                node_j = model_helper.get_node(element.nodes[1])
+            else:
+                # 从模型直接获取
+                node_i = None
+                node_j = None
+                if hasattr(model, 'nodes'):
+                    for node in model.nodes:
+                        if node.id == element.nodes[0]:
+                            node_i = node
+                        elif node.id == element.nodes[1]:
+                            node_j = node
+
+            if not node_i or not node_j:
+                return None
+
+            # 计算梁的方向向量
+            dx = node_j.x - node_i.x
+            dy = node_j.y - node_i.y
+            dz = node_j.z - node_i.z
+
+            # 判断梁的方向（X向或Y向）
+            # 忽略Z方向的差异（只考虑平面内的梁）
+            if abs(dx) > abs(dy):
+                # 梁沿X方向，寻找Y方向相邻的梁
+                beam_direction = 'x'
+                avg_y = (node_i.y + node_j.y) / 2
+            else:
+                # 梁沿Y方向，寻找X方向相邻的梁
+                beam_direction = 'y'
+                avg_x = (node_i.x + node_j.x) / 2
+
+            # 查找同一楼层的所有梁
+            if not hasattr(model, 'elements'):
+                return None
+
+            story_id = getattr(element, 'story', None)
+            parallel_beams = []
+
+            for elem in model.elements:
+                # 只考虑同一楼层的梁
+                if elem.id == element.id:
+                    continue
+                if not hasattr(elem, 'type') or elem.type != 'beam':
+                    continue
+                if story_id and hasattr(elem, 'story') and elem.story != story_id:
+                    continue
+
+                # 获取梁的节点
+                if model_helper:
+                    n_i = model_helper.get_node(elem.nodes[0])
+                    n_j = model_helper.get_node(elem.nodes[1])
+                else:
+                    n_i = None
+                    n_j = None
+                    if hasattr(model, 'nodes'):
+                        for node in model.nodes:
+                            if node.id == elem.nodes[0]:
+                                n_i = node
+                            elif node.id == elem.nodes[1]:
+                                n_j = node
+
+                if not n_i or not n_j:
+                    continue
+
+                # 计算方向
+                bdx = n_j.x - n_i.x
+                bdy = n_j.y - n_i.y
+
+                # 判断是否平行
+                if beam_direction == 'x':
+                    # 当前梁沿X方向，检查其他梁是否也沿X方向
+                    if abs(bdx) > abs(bdy):
+                        # 计算Y方向的距离
+                        other_avg_y = (n_i.y + n_j.y) / 2
+                        distance = abs(avg_y - other_avg_y)
+                        parallel_beams.append((distance, elem))
+                else:
+                    # 当前梁沿Y方向，检查其他梁是否也沿Y方向
+                    if abs(bdy) > abs(bdx):
+                        # 计算X方向的距离
+                        other_avg_x = (n_i.x + n_j.x) / 2
+                        distance = abs(avg_x - other_avg_x)
+                        parallel_beams.append((distance, elem))
+
+            # 按距离排序
+            parallel_beams.sort(key=lambda x: x[0])
+
+            # 计算受荷宽度
+            if len(parallel_beams) >= 2:
+                # 有两侧的平行梁，受荷宽度 = (左侧距离 + 右侧距离) / 2
+                left_distance = parallel_beams[0][0]
+                right_distance = parallel_beams[1][0]
+                tributary_width = (left_distance + right_distance) / 2
+                logger.debug(
+                    f"Calculated tributary width for {element.id}: "
+                    f"{tributary_width:.2f} m (left={left_distance:.2f}, right={right_distance:.2f})"
+                )
+                return tributary_width
+            elif len(parallel_beams) == 1:
+                # 只有一侧的平行梁，受荷宽度 = 单侧距离
+                tributary_width = parallel_beams[0][0]
+                logger.debug(
+                    f"Calculated tributary width for {element.id}: "
+                    f"{tributary_width:.2f} m (single side)"
+                )
+                return tributary_width
+            else:
+                # 没有找到平行梁
+                logger.debug(f"No parallel beams found for {element.id}")
+                return None
+
+        except Exception as e:
+            logger.warning(f"Error calculating tributary width for {getattr(element, 'id', 'unknown')}: {e}")
+            return None
 
 
 class ValidationHelper:

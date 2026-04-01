@@ -22,6 +22,7 @@ from .constants import (
     validate_live_load_value,
     get_default_tributary_width
 )
+from ..shared.model_data_helper import ModelDataHelper, GeometryHelper
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,9 @@ class LiveLoadGenerator:
         self.load_actions = []
         self.output_mode = output_mode
 
-        # 优化：使用更高效的缓存
-        self._section_cache: Dict[str, Any] = {}
+        # 使用共享数据辅助类
+        self._model_helper = ModelDataHelper(model)
+        self._model_helper.preload_data()
 
         # 优化：预加载常用数据
         self._story_map = self._build_story_map()
@@ -434,14 +436,12 @@ class LiveLoadGenerator:
         Returns:
             受荷宽度（米），如果无法计算则返回 None
         """
-        # TODO: 实现基于几何关系的受荷宽度计算
-        # 需要分析：
-        # 1. 梁的相邻平行梁的间距
-        # 2. 楼板布置（单向板/双向板）
-        # 3. 梁的相对位置（边梁/中间梁）
-
-        # 目前返回 None，表示无法从几何关系计算
-        return None
+        # 使用共享的几何计算辅助类
+        return GeometryHelper.calculate_tributary_width_from_geometry(
+            element,
+            self.model,
+            self._model_helper
+        )
 
     def _calculate_tributary_width(
         self,
