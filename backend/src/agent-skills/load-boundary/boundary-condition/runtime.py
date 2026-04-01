@@ -159,6 +159,48 @@ class BoundaryConditionGenerator:
             "count": len(node_ids)
         }
 
+    def apply_elastic_support(
+        self,
+        node_ids: List[str] = None,
+        stiffness_matrix: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        施加弹性支座 (提供刚度约束)
+
+        Args:
+            node_ids: 节点ID列表，如果为None则默认基础节点
+            stiffness_matrix: 6x6 刚度矩阵字典
+
+        Returns:
+            节点约束字典
+        """
+        if node_ids is None:
+            min_z = min(node.z for node in self.model.nodes)
+            node_ids = [node.id for node in self.model.nodes if abs(node.z - min_z) < 0.001]
+
+        # 默认刚度矩阵 (对角矩阵)
+        if stiffness_matrix is None:
+            stiffness_matrix = {
+                'kxx': 1e6, 'kyy': 1e6, 'kzz': 1e6,
+                'kxx_rot': 1e5, 'kyy_rot': 1e5, 'kzz_rot': 1e5
+            }
+
+        logger.info(f"Applying elastic supports to {len(node_ids)} nodes")
+
+        for node_id in node_ids:
+            self.nodal_constraints[node_id] = {
+                "node_id": node_id,
+                "constraint_type": "elastic",
+                "restraints": [False, False, False, False, False, False],  # V2 Schema 格式
+                "stiffness": stiffness_matrix,
+                "extra": {}
+            }
+
+        return {
+            "constraints": self.nodal_constraints,
+            "count": len(node_ids)
+        }
+
     def apply_hinged_member_ends(
         self,
         member_ids: List[str] = None
@@ -516,45 +558,3 @@ def apply_boundary_conditions(model: StructureModelV2, parameters: Dict[str, Any
             "support_type": support_type
         }
     }
-
-    def apply_elastic_support(
-        self,
-        node_ids: List[str] = None,
-        stiffness_matrix: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
-        """
-        施加弹性支座 (提供刚度约束)
-
-        Args:
-            node_ids: 节点ID列表，如果为None则默认基础节点
-            stiffness_matrix: 6x6 刚度矩阵字典
-
-        Returns:
-            节点约束字典
-        """
-        if node_ids is None:
-            min_z = min(node.z for node in self.model.nodes)
-            node_ids = [node.id for node in self.model.nodes if abs(node.z - min_z) < 0.001]
-
-        # 默认刚度矩阵 (对角矩阵)
-        if stiffness_matrix is None:
-            stiffness_matrix = {
-                'kxx': 1e6, 'kyy': 1e6, 'kzz': 1e6,
-                'kxx_rot': 1e5, 'kyy_rot': 1e5, 'kzz_rot': 1e5
-            }
-
-        logger.info(f"Applying elastic supports to {len(node_ids)} nodes")
-
-        for node_id in node_ids:
-            self.nodal_constraints[node_id] = {
-                "node_id": node_id,
-                "constraint_type": "elastic",
-                "restraints": [False, False, False, False, False, False],  # V2 Schema 格式
-                "stiffness": stiffness_matrix,
-                "extra": {}
-            }
-
-        return {
-            "constraints": self.nodal_constraints,
-            "count": len(node_ids)
-        }
