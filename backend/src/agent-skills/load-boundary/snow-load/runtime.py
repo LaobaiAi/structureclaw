@@ -23,7 +23,7 @@ class SnowLoadGenerator:
         "flat": 1.0,          # 平屋面
         "sloped_25": 0.8,     # 坡度 < 25°
         "sloped_25_50": 0.6,  # 坡度 25°-50°
-        "slopped_50": 0.0,    # 坡度 > 50°
+        "sloped_50": 0.0,    # 坡度 > 50°
     }
 
     def __init__(self, model: StructureModelV2):
