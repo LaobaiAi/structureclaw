@@ -136,18 +136,17 @@ Backend runtime type definitions are located in `backend/src/agent-runtime/types
 ### 荷载工况类型 / Load Case Types
 
 ```typescript
-// 荷载工况类型枚举 (10种)
+// 荷载工况类型枚举 - 完全对齐 V2 Schema LoadCaseV2.type
 export enum LoadCaseTypeEnum {
-  DEAD_LOAD = 'dead_load',
-  LIVE_LOAD = 'live_load',
-  WIND_LOAD = 'wind_load',
-  SEISMIC_LOAD = 'seismic_load',
-  SNOW_LOAD = 'snow_load',
-  TEMPERATURE_LOAD = 'temperature_load',
-  CRANE_LOAD = 'crane_load',
-  CONSTRUCTION_LOAD = 'construction_load',
-  HUMAN_DEFENSE_LOAD = 'human_defense_load',
-  CUSTOM_LOAD = 'custom_load',
+  DEAD = 'dead',              // 恒载 (对齐 V2 Schema)
+  LIVE = 'live',              // 活载 (对齐 V2 Schema)
+  WIND = 'wind',              // 风载 (对齐 V2 Schema)
+  SEISMIC = 'seismic',        // 地震 (对齐 V2 Schema)
+  TEMPERATURE = 'temperature', // 温度 (对齐 V2 Schema)
+  SETTLEMENT = 'settlement',  // 沉降 (对齐 V2 Schema)
+  CRANE = 'crane',            // 吊车 (对齐 V2 Schema)
+  SNOW = 'snow',              // 雪 (对齐 V2 Schema)
+  OTHER = 'other',            // 其他 (对齐 V2 Schema)
 }
 
 // 荷载动作类型枚举 (6种)
@@ -174,15 +173,15 @@ export interface LoadCase {
 ```typescript
 // 荷载动作接口 - V2 Schema 使用 Dict[str, Any]，此处提供具体结构
 export interface LoadAction {
-  id?: string;                           // 动作ID (可选，V2 Schema 允许任意字段)
-  case_id?: string;                      // 所属工况ID (可选，V2 Schema 允许任意字段)
-  element_type?: LoadElementTypeEnum;     // 单元类型 (可选，V2 Schema 允许任意字段)
-  element_id?: string;                   // 单元ID (可选，V2 Schema 允许任意字段)
-  load_type?: LoadTypeEnum;              // 荷载类型 (可选，V2 Schema 允许任意字段)
-  load_value?: number;                   // 荷载值 (可选，V2 Schema 允许任意字段)
-  load_direction?: Vector3D;             // 荷载方向向量 (可选)
-  position?: Vector3D;                  // 作用位置 (可选)
-  extra?: Record<string, any>;           // 扩展字段 (对齐 V2 Schema)
+  id?: string;                    // 动作ID (可选，V2 Schema 允许任意字段)
+  caseId?: string;                // 所属工况ID (可选，V2 Schema 允许任意字段)
+  elementType?: LoadElementTypeEnum; // 单元类型 (可选，V2 Schema 允许任意字段)
+  elementId?: string;             // 单元ID (可选，V2 Schema 允许任意字段)
+  loadType?: LoadTypeEnum;        // 荷载类型 (可选，V2 Schema 允许任意字段)
+  loadValue?: number;             // 荷载值 (可选，V2 Schema 允许任意字段)
+  loadDirection?: Vector3D;       // 荷载方向向量 (可选)
+  position?: Vector3D;            // 作用位置 (可选)
+  extra?: Record<string, any>;     // 扩展字段 (对齐 V2 Schema)
 }
 ```
 
@@ -191,45 +190,44 @@ export interface LoadAction {
 ```typescript
 // 节点约束类型枚举
 export enum NodalConstraintTypeEnum {
-  FIXED = 'fixed',                       // 固定
-  PINNED = 'pinned',                     // 铰接
-  ROLLER = 'roller',                     // 滚动
-  SPRING = 'spring',                     // 弹簧
-  CUSTOM = 'custom',                     // 自定义
+  FIXED = 'fixed',           // 固定支座
+  PINNED = 'pinned',       // 铰支座
+  SLIDING = 'sliding',      // 滑动支座
+  ELASTIC = 'elastic',        // 弹性支座（预留，待 #39 Schema 确认）
 }
 
 // 自由度集合接口 (6个自由度)
 export interface DOFSet {
-  ux: boolean;                           // X方向平动
-  uy: boolean;                           // Y方向平动
-  uz: boolean;                           // Z方向平动
-  rx: boolean;                           // X方向转动
-  ry: boolean;                           // Y方向转动
-  rz: boolean;                           // Z方向转动
+  uX: boolean;  // X 轴平动位移
+  uY: boolean;  // Y 轴平动位移
+  uZ: boolean;  // Z 轴平动位移
+  rotX: boolean;  // X 轴转角位移
+  rotY: boolean;  // Y 轴转角位移
+  rotZ: boolean;  // Z 轴转角位移
 }
 
-// 节点约束接口 - 对齐 V2 Schema NodeV2.restraints
+// 节点约束接口 - V2 Schema 使用 restraints: List[bool]，此处提供扩展定义
 export interface NodalConstraint {
-  node_id: string;                       // 节点ID (下划线命名对齐 V2 Schema)
-  constraint_type?: NodalConstraintTypeEnum; // 约束类型 (可选)
-  restraints?: [boolean, boolean, boolean, boolean, boolean, boolean]; // V2 Schema 格式 [ux, uy, uz, rx, ry, rz]
-  restrained_dofs?: DOFSet;              // 约束的自由度字典 (可选，与 V2 Schema 格式不同)
-  stiffness?: Matrix6x6;                 // 弹簧刚度矩阵 (可选，仅 elastic 类型)
-  extra?: Record<string, any>;           // 扩展字段 (对齐 V2 Schema)
+  nodeId: string;                // 节点ID
+  constraintType?: NodalConstraintTypeEnum; // 约束类型 (可选，V2 Schema 未定义)
+  restraints?: [boolean, boolean, boolean, boolean, boolean, boolean]; // 对齐 V2 Schema: [ux, uy, uz, rx, ry, rz]
+  restrainedDOFs?: DOFSet;       // 约束的自由度 (可选，与 V2 Schema 格式不同)
+  stiffness?: Matrix6x6;         // 弹簧刚度矩阵 (可选，V2 Schema 允许任意字段)
+  extra?: Record<string, any>;    // 扩展字段 (对齐 V2 Schema)
 }
 ```
 
 ### 杆端释放接口 / Member End Release Interface
 
 ```typescript
-// 杆端释放接口 - 对齐 V2 Schema ElementV2.releases
+// 杆端释放接口 - V2 Schema 使用 releases: Dict[str, Any]，此处提供扩展定义
 export interface MemberEndRelease {
-  member_id: string;                     // 杆件ID (下划线命名对齐 V2 Schema)
-  release_i?: DOFSet;                   // I端释放自由度 (可选)
-  release_j?: DOFSet;                   // J端释放自由度 (可选)
-  spring_stiffness_i?: Vector6D;        // I端弹簧刚度 (可选)
-  spring_stiffness_j?: Vector6D;        // J端弹簧刚度 (可选)
-  extra?: Record<string, any>;          // 扩展字段 (对齐 V2 Schema)
+  memberId: string;              // 杆件ID
+  releaseI?: DOFSet;             // I端释放 (可选，V2 Schema 允许任意字段)
+  releaseJ?: DOFSet;             // J端释放 (可选，V2 Schema 允许任意字段)
+  springStiffnessI?: Vector6D;   // I端弹簧刚度 (可选，V2 Schema 允许任意字段)
+  springStiffnessJ?: Vector6D;   // J端弹簧刚度 (可选，V2 Schema 允许任意字段)
+  extra?: Record<string, any>;    // 扩展字段 (对齐 V2 Schema)
 }
 ```
 
@@ -238,19 +236,19 @@ export interface MemberEndRelease {
 ```typescript
 // 轴向方向枚举
 export enum AxisDirectionEnum {
-  X = 'x',                               // X轴
-  Y = 'y',                               // Y轴
-  Z = 'z',                               // Z轴
+  STRONG_AXIS = 'strong_axis',    // 强轴
+  WEAK_AXIS = 'weak_axis',      // 弱轴
+  INCLINED_AXIS = 'inclined_axis' // 斜轴
 }
 
-// 计算长度接口 - 通过 ElementV2.extra 扩展
+// 计算长度接口 - V2 Schema 未定义，此处提供扩展定义
 export interface EffectiveLength {
-  member_id: string;                     // 杆件ID (下划线命名对齐 V2 Schema)
-  direction?: AxisDirectionEnum;         // 计算方向 (可选)
-  calc_length?: number;                  // 几何长度 (可选)
-  length_factor?: number;                // 长度系数 (可选)
-  effective_length?: number;             // 计算长度 = calc_length * length_factor (可选)
-  extra?: Record<string, any>;          // 扩展字段 (对齐 V2 Schema)
+  memberId: string;              // 杆件ID
+  direction?: AxisDirectionEnum; // 方向 (可选)
+  calcLength?: number;           // 几何长度 (可选)
+  lengthFactor?: number;         // 长度系数 (可选)
+  effectiveLength?: number;      // 计算长度 (可选)
+  extra?: Record<string, any>;    // 扩展字段 (对齐 V2 Schema)
 }
 ```
 
@@ -272,23 +270,22 @@ from core.load_case import LoadCase
 # 创建荷载工况
 load_case = LoadCase(
     case_id="LC01",
-    case_name="恒载工况",
-    case_type="dead_load",
+    case_type="dead",
     description="结构自重及永久荷载"
 )
 
 # 获取荷载工况数据
 case_dict = load_case.create_load_case()
 # {
-#     "caseId": "LC01",
-#     "caseName": "恒载工况",
-#     "caseType": "dead_load",
-#     "description": "结构自重及永久荷载"
+#     "id": "LC01",
+#     "type": "dead",
+#     "description": "结构自重及永久荷载",
+#     "loads": [],
+#     "extra": {}
 # }
 
 # 修改荷载工况
 load_case.modify_load_case(
-    case_name="修改后的恒载工况",
     description="更新描述"
 )
 
@@ -297,7 +294,7 @@ case_info = load_case.query_load_case()
 
 # 删除荷载工况
 delete_result = load_case.delete_load_case()
-# {"caseId": "LC01", "deleted": True}
+# {"id": "LC01", "deleted": True}
 ```
 
 ---
@@ -308,36 +305,43 @@ delete_result = load_case.delete_load_case()
 
 **功能**: 提供荷载动作的 CRUD 操作
 
-**使用示例**:
+**注意**: LoadAction 作为独立类在 core/ 目录中未实际实现。
+当前荷载动作通过 LoadCase.loads 字段直接存储为字典列表。
+
+**荷载动作格式示例**:
 
 ```python
-from core.load_action import LoadAction
+# 直接在 LoadCase 中添加荷载动作
+from core.load_case import LoadCase
 
-# 创建荷载动作
-load_action = LoadAction(
-    action_id="LA01",
+load_case = LoadCase(
     case_id="LC01",
-    element_type="beam",
-    element_id="B1",
-    load_type="point_force",
-    load_value=50.0  # kN
+    case_type="dead",
+    description="恒载工况"
 )
 
-# 创建带方向和位置的荷载动作
-action_dict = load_action.create_load_action(
-    load_direction={"x": 0.0, "y": -1.0, "z": 0.0},  # 向下
-    position={"x": 2.5, "y": 3.0, "z": 0.0}        # 中点位置
-)
-# {
-#     "actionId": "LA01",
-#     "caseId": "LC01",
-#     "elementType": "beam",
-#     "elementId": "B1",
-#     "loadType": "point_force",
-#     "loadValue": 50.0,
-#     "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0},
-#     "position": {"x": 2.5, "y": 3.0, "z": 0.0}
-# }
+# 添加集中力荷载
+load_action_point = {
+    "id": "LA01",
+    "elementId": "B1",
+    "elementType": "beam",
+    "loadType": "point_force",
+    "loadValue": 50.0,
+    "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0},
+    "position": {"x": 2.5, "y": 3.0, "z": 0.0}
+}
+load_case.add_load(load_action_point)
+
+# 添加均布荷载
+load_action_dist = {
+    "id": "LA02",
+    "elementId": "B2",
+    "elementType": "beam",
+    "loadType": "distributed_load",
+    "loadValue": 10.0,  # kN/m
+    "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0}
+}
+load_case.add_load(load_action_dist)
 ```
 
 **荷载类型** / Load Types:
@@ -365,64 +369,72 @@ fixed_constraint = NodalConstraint(
     node_id="N1",
     constraint_type="fixed",
     restrained_dofs={
-        "ux": True,  # 约束X平动
-        "uy": True,  # 约束Y平动
-        "uz": True,  # 约束Z平动
-        "rx": True,  # 约束X转动
-        "ry": True,  # 约束Y转动
-        "rz": True   # 约束Z转动
+        "uX": True,  # 约束X平动
+        "uY": True,  # 约束Y平动
+        "uZ": True,  # 约束Z平动
+        "rotX": True,  # 约束X转动
+        "rotY": True,  # 约束Y转动
+        "rotZ": True   # 约束Z转动
     }
 )
 
 constraint_dict = fixed_constraint.create_nodal_constraint()
+# {
+#     "node_id": "N1",
+#     "constraint_type": "fixed",
+#     "restrained_dofs": {...},
+#     "extra": {}
+# }
 
 # 创建铰支座 (仅约束平动)
 pinned_constraint = NodalConstraint(
     node_id="N2",
     constraint_type="pinned",
     restrained_dofs={
-        "ux": True,
-        "uy": True,
-        "uz": True,
-        "rx": False,  # 自由转动
-        "ry": False,
-        "rz": False
+        "uX": True,
+        "uY": True,
+        "uZ": True,
+        "rotX": False,  # 自由转动
+        "rotY": False,
+        "rotZ": False
     }
 )
 
-# 创建弹簧支座 (带刚度)
-spring_constraint = NodalConstraint(
+# 创建滑动支座 (带 V2 Schema 格式的 restraints)
+sliding_constraint = NodalConstraint(
     node_id="N3",
-    constraint_type="spring",
+    constraint_type="sliding",
+    restraints=[True, True, True, False, False, False],  # [ux, uy, uz, rx, ry, rz]
     restrained_dofs={
-        "ux": True,
-        "uy": True,
-        "uz": False,
-        "rx": False,
-        "ry": False,
-        "rz": False
+        "uX": True,
+        "uY": True,
+        "uZ": True,
+        "rotX": False,
+        "rotY": False,
+        "rotZ": False
     }
 )
 
-# 添加弹簧刚度矩阵
-spring_constraint.create_nodal_constraint(
+# 创建弹性支座 (带刚度矩阵)
+elastic_constraint = NodalConstraint(
+    node_id="N4",
+    constraint_type="elastic",
     stiffness={
-        "kxx": 1e8, "kxy": 0, "kxz": 0,
-        "kyx": 0, "kyy": 1e8, "kyz": 0,
-        "kzx": 0, "kzy": 0, "kzz": 1e8,
-        "krxx": 1e6, "krxy": 0, "krxz": 0,
-        "kryx": 0, "kryy": 1e6, "kryz": 0,
-        "krzx": 0, "krzy": 0, "krzz": 1e6
+        "Fx_ux": 1e8, "Fx_uy": 0, "Fx_uz": 0, "Fx_rx": 0, "Fx_ry": 0, "Fx_rz": 0,
+        "Fy_ux": 0, "Fy_uy": 1e8, "Fy_uz": 0, "Fy_rx": 0, "Fy_ry": 0, "Fy_rz": 0,
+        "Fz_ux": 0, "Fz_uy": 0, "Fz_uz": 1e8, "Fz_rx": 0, "Fz_ry": 0, "Fz_rz": 0,
+        "Mx_ux": 0, "Mx_uy": 0, "Mx_uz": 0, "Mx_rx": 1e6, "Mx_ry": 0, "Mx_rz": 0,
+        "My_ux": 0, "My_uy": 0, "My_uz": 0, "My_rx": 0, "My_ry": 1e6, "My_rz": 0,
+        "Mz_ux": 0, "Mz_uy": 0, "Mz_uz": 0, "Mz_rx": 0, "Mz_ry": 0, "Mz_rz": 1e6
     }
 )
 ```
 
 **约束类型** / Constraint Types:
-- `fixed`: 固定 (约束所有6个自由度)
-- `pinned`: 铰接 (仅约束3个平动自由度)
-- `roller`: 滚动 (约束1-2个平动自由度)
-- `spring`: 弹簧 (需指定刚度矩阵)
-- `custom`: 自定义
+- `fixed`: 固定支座 (约束所有6个自由度)
+- `pinned`: 铰支座 (仅约束3个平动自由度)
+- `sliding`: 滑动支座 (约束平动，允许转动)
+- `elastic`: 弹性支座 (需指定刚度矩阵)
 
 ---
 
@@ -441,40 +453,45 @@ from core.member_end_release import MemberEndRelease
 hinged_member = MemberEndRelease(
     member_id="B1",
     release_i={
-        "ux": False, "uy": False, "uz": False,
-        "rx": True,  "ry": True,  "rz": True   # I端释放转动
+        "uX": False, "uY": False, "uZ": False,
+        "rotX": True,  "rotY": True,  "rotZ": True   # I端释放转动
     },
     release_j={
-        "ux": False, "uy": False, "uz": False,
-        "rx": True,  "ry": True,  "rz": True   # J端释放转动
+        "uX": False, "uY": False, "uZ": False,
+        "rotX": True,  "rotY": True,  "rotZ": True   # J端释放转动
     }
 )
 
 release_dict = hinged_member.create_member_end_release()
+# {
+#     "member_id": "B1",
+#     "release_i": {...},
+#     "release_j": {...},
+#     "extra": {}
+# }
 
 # 创建带弹簧刚度的释放
 spring_release = MemberEndRelease(
     member_id="B2",
     release_i={
-        "ux": False, "uy": False, "uz": False,
-        "rx": True,  "ry": False, "rz": True
+        "uX": False, "uY": False, "uZ": False,
+        "rotX": True,  "rotY": False, "rotZ": True
     },
     release_j={
-        "ux": False, "uy": False, "uz": False,
-        "rx": True,  "ry": False, "rz": True
+        "uX": False, "uY": False, "uZ": False,
+        "rotX": True,  "rotY": False, "rotZ": True
+    },
+    spring_stiffness_i={
+        "uX": 0, "uY": 0, "uZ": 0,
+        "rotX": 1e5, "rotY": 0, "rotZ": 0
+    },
+    spring_stiffness_j={
+        "uX": 0, "uY": 0, "uZ": 0,
+        "rotX": 1e5, "rotY": 0, "rotZ": 0
     }
 )
 
-release_dict = spring_release.create_member_end_release(
-    spring_stiffness_i={
-        "k_x": 0, "k_y": 0, "k_z": 0,
-        "k_rx": 1e5, "k_ry": 0, "k_rz": 0
-    },
-    spring_stiffness_j={
-        "k_x": 0, "k_y": 0, "k_z": 0,
-        "k_rx": 1e5, "k_ry": 0, "k_rz": 0
-    }
-)
+release_dict = spring_release.create_member_end_release()
 ```
 
 ---
@@ -493,19 +510,20 @@ from core.effective_length import EffectiveLength
 # 创建计算长度 (柱的弱轴方向)
 effective_length = EffectiveLength(
     member_id="C1",
-    direction="y",  # 弱轴Y方向
-    calc_length=3.6,     # 几何长度 3.6m
-    length_factor=1.0    # 长度系数
+    direction="weak_axis",  # 弱轴方向
+    calc_length=3.6,       # 几何长度 3.6m
+    length_factor=1.0      # 长度系数
 )
 
-# 自动计算 effectiveLength = calc_length * lengthFactor
+# 自动计算 effective_length = calc_length * length_factor
 length_dict = effective_length.create_effective_length()
 # {
-#     "memberId": "C1",
-#     "direction": "y",
-#     "calcLength": 3.6,
-#     "lengthFactor": 1.0,
-#     "effectiveLength": 3.6  # 3.6 * 1.0
+#     "member_id": "C1",
+#     "direction": "weak_axis",
+#     "calc_length": 3.6,
+#     "length_factor": 1.0,
+#     "effective_length": 3.6,  # 3.6 * 1.0
+#     "extra": {}
 # }
 
 # 不同边界条件的长度系数示例:
@@ -515,11 +533,11 @@ length_dict = effective_length.create_effective_length()
 # 一端固定、一端自由: 2.0
 effective_length = EffectiveLength(
     member_id="C1",
-    direction="y",
+    direction="weak_axis",
     calc_length=3.6,
     length_factor=0.7  # 一端固定、一端铰接
 )
-# effectiveLength = 2.52
+# effective_length = 2.52
 ```
 
 ---
@@ -695,48 +713,44 @@ result = apply_boundary_conditions(model, {
 
 ```python
 from core.load_case import LoadCase
-from core.load_action import LoadAction
 
 # 1. 创建荷载工况
 load_case = LoadCase(
     case_id="LC01",
-    case_name="恒载工况",
-    case_type="dead_load",
+    case_type="dead",
     description="结构自重"
 )
 case_data = load_case.create_load_case()
 
 # 2. 添加荷载动作
-action1 = LoadAction(
-    action_id="LA01",
-    case_id="LC01",
-    element_type="beam",
-    element_id="B1",
-    load_type="distributed_load",
-    load_value=10.0  # kN/m
-)
-action1_data = action1.create_load_action()
-
-action2 = LoadAction(
-    action_id="LA02",
-    case_id="LC01",
-    element_type="column",
-    element_id="C1",
-    load_type="axial_force",
-    load_value=100.0  # kN
-)
-action2_data = action2.create_load_action()
-
-# 3. 组合成V2 Schema格式
-load_case_v2 = {
-    "id": load_case.case_id,
-    "type": load_case.case_type,
-    "description": load_case.description,
-    "loads": [
-        action1_data,
-        action2_data
-    ]
+action1 = {
+    "id": "LA01",
+    "elementId": "B1",
+    "elementType": "beam",
+    "loadType": "distributed_load",
+    "loadValue": 10.0,  # kN/m
+    "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0}
 }
+load_case.add_load(action1)
+
+action2 = {
+    "id": "LA02",
+    "elementId": "C1",
+    "elementType": "column",
+    "loadType": "axial_force",
+    "loadValue": 100.0  # kN
+}
+load_case.add_load(action2)
+
+# 3. 转换为 V2 Schema 格式
+load_case_v2 = load_case.create_load_case()
+# {
+#     "id": "LC01",
+#     "type": "dead",
+#     "description": "结构自重",
+#     "loads": [action1, action2],
+#     "extra": {}
+# }
 ```
 
 ### 创建边界条件 / Create Boundary Conditions
@@ -751,8 +765,8 @@ node1_constraint = NodalConstraint(
     node_id="N1",
     constraint_type="fixed",
     restrained_dofs={
-        "ux": True, "uy": True, "uz": True,
-        "rx": True, "ry": True, "rz": True
+        "uX": True, "uY": True, "uZ": True,
+        "rotX": True, "rotY": True, "rotZ": True
     }
 )
 
@@ -760,28 +774,28 @@ node2_constraint = NodalConstraint(
     node_id="N2",
     constraint_type="pinned",
     restrained_dofs={
-        "ux": True, "uy": True, "uz": True,
-        "rx": False, "ry": False, "rz": False
+        "uX": True, "uY": True, "uZ": True,
+        "rotX": False, "rotY": False, "rotZ": False
     }
 )
 
-# 2. 定义杆端释放
+# 2. 定义杆端释放 (Y轴铰接)
 member_release = MemberEndRelease(
     member_id="B1",
     release_i={
-        "ux": False, "uy": False, "uz": False,
-        "rx": False, "ry": True, "rz": False
+        "uX": False, "uY": False, "uZ": False,
+        "rotX": False, "rotY": True, "rotZ": False
     },
     release_j={
-        "ux": False, "uy": False, "uz": False,
-        "rx": False, "ry": True, "rz": False
+        "uX": False, "uY": False, "uZ": False,
+        "rotX": False, "rotY": True, "rotZ": False
     }
 )
 
-# 3. 定义计算长度
+# 3. 定义计算长度 (柱的弱轴)
 effective_length = EffectiveLength(
     member_id="C1",
-    direction="y",
+    direction="weak_axis",
     calc_length=3.6,
     length_factor=0.7
 )
@@ -811,7 +825,7 @@ Mapping between V2 Schema and OpenSeesPy/PKPM API is documented in:
 ## 开发计划 / Development Plan
 
 ### 已完成 / Completed ✅
-- [x] TypeScript 类型定义 (10种荷载工况, 6种荷载类型)
+- [x] TypeScript 类型定义 (9种荷载工况, 5种荷载类型)
 - [x] Python 核心模块 (5个CRUD类)
 - [x] V2 Schema 兼容性验证
 - [x] README 文档
