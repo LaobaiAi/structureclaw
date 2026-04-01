@@ -142,35 +142,388 @@ export type RestraintDOF = [boolean, boolean, boolean, boolean, boolean, boolean
 // 格式: [ux, uy, uz, rx, ry, rz]
 // True = 约束, False = 自由
 
-// 弹性刚度矩阵（6x6）
+// ============================================================================
+// 刚度矩阵类型定义 - 理论完整性与工程实践性的平衡
+// ============================================================================
+
+// ============================================================================
+// 【理论完整型】保留用于不时之需的完整6x6刚度矩阵接口
+// 用途：复杂耦合场景、特殊结构、学术研究、需要精确控制所有刚度项
+// 注意：这是完整的理论表示，包含36个刚度假（对应6自由度）
+// ============================================================================
 export interface Matrix6x6 {
-  xx: number;  // 弯曲刚度
-  xy: number;  // XY 剪切刚度
-  xz: number;  // XZ 扭剪刚度
-  yx: number;  // YX 扭剪刚度
-  yy: number;  // YY 扭剪刚度
-  yz: number;  // YZ 扭剪刚度
-  zx: number;  // ZX 扭剪刚度
-  zy: number;  // ZY 扭剪刚度
+  // 行1: X方向力对各自由度的刚度
+  Fx_ux: number;  // X力对X位移
+  Fx_uy: number;  // X力对Y位移
+  Fx_uz: number;  // X力对Z位移
+  Fx_rx: number;  // X力对绕X转动
+  Fx_ry: number;  // X力对绕Y转动
+  Fx_rz: number;  // X力对绕Z转动
+
+  // 行2: Y方向力对各自由度的刚度
+  Fy_ux: number;  // Y力对X位移
+  Fy_uy: number;  // Y力对Y位移
+  Fy_uz: number;  // Y力对Z位移
+  Fy_rx: number;  // Y力对绕X转动
+  Fy_ry: number;  // Y力对绕Y转动
+  Fy_rz: number;  // Y力对绕Z转动
+
+  // 行3: Z方向力对各自由度的刚度
+  Fz_ux: number;  // Z力对X位移
+  Fz_uy: number;  // Z力对Y位移
+  Fz_uz: number;  // Z力对Z位移
+  Fz_rx: number;  // Z力对绕X转动
+  Fz_ry: number;  // Z力对绕Y转动
+  Fz_rz: number;  // Z力对绕Z转动
+
+  // 行4: 绕X力矩对各自由度的刚度
+  Mx_ux: number;  // X力矩对X位移
+  Mx_uy: number;  // X力矩对Y位移
+  Mx_uz: number;  // X力矩对Z位移
+  Mx_rx: number;  // X力矩对绕X转动
+  Mx_ry: number;  // X力矩对绕Y转动
+  Mx_rz: number;  // X力矩对绕Z转动
+
+  // 行5: 绕Y力矩对各自由度的刚度
+  My_ux: number;  // Y力矩对X位移
+  My_uy: number;  // Y力矩对Y位移
+  My_uz: number;  // Y力矩对Z位移
+  My_rx: number;  // Y力矩对绕X转动
+  My_ry: number;  // Y力矩对绕Y转动
+  My_rz: number;  // Y力矩对绕Z转动
+
+  // 行6: 绕Z力矩对各自由度的刚度
+  Mz_ux: number;  // Z力矩对X位移
+  Mz_uy: number;  // Z力矩对Y位移
+  Mz_uz: number;  // Z力矩对Z位移
+  Mz_rx: number;  // Z力矩对绕X转动
+  Mz_ry: number;  // Z力矩对绕Y转动
+  Mz_rz: number;  // Z力矩对绕Z转动
 }
 
-// 三维向量
+// 完整6x6矩阵的数组表示形式（另一种理论完整表示）
+export type Matrix6x6Array = number[][];
+
+// ============================================================================
+// 【工程优化型】优先使用的简化刚度矩阵接口
+// 用途：95%的工程场景，简化输入，提高效率
+// 优势：自动转换、类型安全、易于理解
+// ============================================================================
+
+// 工程简化1：对角刚度矩阵（80%常见场景）
+// 适用：普通框架节点、基础节点、简单支撑
+export interface DiagonalStiffness {
+  kx?: number;   // X方向平动刚度
+  ky?: number;   // Y方向平动刚度
+  kz?: number;   // Z方向平动刚度
+  krx?: number;  // X方向转动刚度
+  kry?: number;  // Y方向转动刚度
+  krz?: number;  // Z方向转动刚度
+}
+
+// 工程简化2：分块对角刚度矩阵（15%中等复杂场景）
+// 适用：考虑XY平面耦合的节点、隔震支座、特殊支撑
+export interface BlockDiagonalStiffness {
+  // 平动块（3x3，可能耦合）
+  kxx?: number;  kxy?: number;  kxz?: number;
+  kyx?: number;  kyy?: number;  kyz?: number;
+  kzx?: number;  kzy?: number;  kzz?: number;
+  // 转动块（3x3，通常对角）
+  krx?: number;  kry?: number;  krz?: number;
+}
+
+// ============================================================================
+// 统一输入接口 - 支持所有刚度表示形式
+// ============================================================================
+export type StiffnessInput = Matrix6x6 | Matrix6x6Array | DiagonalStiffness | BlockDiagonalStiffness;
+
+// ============================================================================
+// 约束类型枚举
+// ============================================================================
+export type ConstraintType =
+  | 'FIXED'      // 固定约束（所有自由度）
+  | 'HINGE'      // 铰接约束（仅平动）
+  | 'ROLLER'     // 滚动约束（部分平动）
+  | 'ELASTIC'    // 弹性约束（指定刚度）
+  | 'ISOLATOR'   // 隔震支座（特殊刚度分布）
+  | 'CUSTOM';    // 自定义约束
+
+// ============================================================================
+// 刚度矩阵工具类 - 工程优化与理论完整性的桥梁
+// ============================================================================
+export class StiffnessMatrixUtils {
+  /**
+   * 将任意输入转换为标准6x6数组矩阵（理论完整型）
+   * @param input 刚度输入（支持所有类型）
+   * @returns 标准6x6数组矩阵
+   */
+  static toStandardMatrix(input: StiffnessInput): Matrix6x6Array {
+    if (this.isMatrix6x6Array(input)) {
+      // 已是数组形式，直接返回
+      return input;
+    } else if (this.isMatrix6x6(input)) {
+      // 接口形式转数组形式
+      return this.interfaceToArray(input);
+    } else if (this.isDiagonalStiffness(input)) {
+      // 对角刚度转完整矩阵
+      return this.createDiagonalMatrix(input);
+    } else if (this.isBlockDiagonalStiffness(input)) {
+      // 分块对角转完整矩阵
+      return this.createBlockDiagonalMatrix(input);
+    }
+    throw new Error('Invalid stiffness input type');
+  }
+
+  /**
+   * 接口形式转数组形式（理论完整型之间的转换）
+   * @param matrix 接口形式的6x6矩阵
+   * @returns 数组形式的6x6矩阵
+   */
+  static interfaceToArray(matrix: Matrix6x6): Matrix6x6Array {
+    return [
+      [matrix.Fx_ux, matrix.Fx_uy, matrix.Fx_uz, matrix.Fx_rx, matrix.Fx_ry, matrix.Fx_rz],
+      [matrix.Fy_ux, matrix.Fy_uy, matrix.Fy_uz, matrix.Fy_rx, matrix.Fy_ry, matrix.Fy_rz],
+      [matrix.Fz_ux, matrix.Fz_uy, matrix.Fz_uz, matrix.Fz_rx, matrix.Fz_ry, matrix.Fz_rz],
+      [matrix.Mx_ux, matrix.Mx_uy, matrix.Mx_uz, matrix.Mx_rx, matrix.Mx_ry, matrix.Mx_rz],
+      [matrix.My_ux, matrix.My_uy, matrix.My_uz, matrix.My_rx, matrix.My_ry, matrix.My_rz],
+      [matrix.Mz_ux, matrix.Mz_uy, matrix.Mz_uz, matrix.Mz_rx, matrix.Mz_ry, matrix.Mz_rz]
+    ];
+  }
+
+  /**
+   * 创建对角刚度矩阵（工程优化型）
+   * @param diag 对角刚度值
+   * @returns 6x6对角矩阵（数组形式）
+   */
+  static createDiagonalMatrix(diag: DiagonalStiffness): Matrix6x6Array {
+    const matrix: Matrix6x6Array = Array(6).fill(0).map(() => Array(6).fill(0));
+    const values = [
+      diag.kx ?? 0, diag.ky ?? 0, diag.kz ?? 0,
+      diag.krx ?? 0, diag.kry ?? 0, diag.krz ?? 0
+    ];
+
+    for (let i = 0; i < 6; i++) {
+      matrix[i][i] = values[i];
+    }
+    return matrix;
+  }
+
+  /**
+   * 创建分块对角刚度矩阵（工程优化型）
+   * @param blockDiag 分块对角刚度值
+   * @returns 6x6分块对角矩阵（数组形式）
+   */
+  static createBlockDiagonalMatrix(blockDiag: BlockDiagonalStiffness): Matrix6x6Array {
+    const matrix: Matrix6x6Array = Array(6).fill(0).map(() => Array(6).fill(0));
+
+    // 平动块（3x3）
+    matrix[0][0] = blockDiag.kxx ?? 0; matrix[0][1] = blockDiag.kxy ?? 0; matrix[0][2] = blockDiag.kxz ?? 0;
+    matrix[1][0] = blockDiag.kyx ?? 0; matrix[1][1] = blockDiag.kyy ?? 0; matrix[1][2] = blockDiag.kyz ?? 0;
+    matrix[2][0] = blockDiag.kzx ?? 0; matrix[2][1] = blockDiag.kzy ?? 0; matrix[2][2] = blockDiag.kzz ?? 0;
+
+    // 转动块（3x3对角）
+    matrix[3][3] = blockDiag.krx ?? 0;
+    matrix[4][4] = blockDiag.kry ?? 0;
+    matrix[5][5] = blockDiag.krz ?? 0;
+
+    return matrix;
+  }
+
+  /**
+   * 判断是否为6x6数组矩阵
+   */
+  private static isMatrix6x6Array(input: any): input is Matrix6x6Array {
+    return Array.isArray(input) && input.length === 6 &&
+           input.every(row => Array.isArray(row) && row.length === 6);
+  }
+
+  /**
+   * 判断是否为接口形式的6x6矩阵
+   */
+  private static isMatrix6x6(input: any): input is Matrix6x6 {
+    return typeof input === 'object' && input !== null &&
+           'Fx_ux' in input && 'Mz_rz' in input;
+  }
+
+  /**
+   * 判断是否为对角刚度
+   */
+  private static isDiagonalStiffness(input: any): input is DiagonalStiffness {
+    return typeof input === 'object' && input !== null &&
+           ('kx' in input || 'ky' in input || 'kz' in input ||
+            'krx' in input || 'kry' in input || 'krz' in input);
+  }
+
+  /**
+   * 判断是否为分块对角刚度
+   */
+  private static isBlockDiagonalStiffness(input: any): input is BlockDiagonalStiffness {
+    return typeof input === 'object' && input !== null &&
+           ('kxx' in input || 'kyy' in input || 'kzz' in input);
+  }
+
+  /**
+   * 判断刚度矩阵是否为刚性（固定约束）
+   * @param matrix 刚度矩阵
+   * @param threshold 刚性阈值（默认1e15）
+   * @returns 是否为刚性约束
+   */
+  static isRigidMatrix(matrix: Matrix6x6Array, threshold: number = 1e15): boolean {
+    // 检查所有对角元素是否大于阈值
+    for (let i = 0; i < 6; i++) {
+      if (matrix[i][i] < threshold) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 验证刚度矩阵的有效性
+   * @param matrix 刚度矩阵
+   * @returns 是否有效
+   */
+  static validateMatrix(matrix: Matrix6x6Array): boolean {
+    if (!Array.isArray(matrix) || matrix.length !== 6) {
+      return false;
+    }
+    for (let i = 0; i < 6; i++) {
+      if (!Array.isArray(matrix[i]) || matrix[i].length !== 6) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+  /**
+   * 判断刚度矩阵是否为刚性（固定约束）
+   * @param matrix 刚度矩阵
+   * @param threshold 刚性阈值（默认1e15）
+   * @returns 是否为刚性约束
+   */
+  static isRigidMatrix(matrix: Matrix6x6, threshold: number = 1e15): boolean {
+    // 检查所有对角元素是否大于阈值
+    for (let i = 0; i < 6; i++) {
+      if (matrix[i][i] < threshold) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 验证刚度矩阵的有效性
+   * @param matrix 刚度矩阵
+   * @returns 是否有效
+   */
+  static validateMatrix(matrix: Matrix6x6): boolean {
+    if (!Array.isArray(matrix) || matrix.length !== 6) {
+      return false;
+    }
+    for (let i = 0; i < 6; i++) {
+      if (!Array.isArray(matrix[i]) || matrix[i].length !== 6) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+// ============================================================================
+// 预定义约束模板
+// ============================================================================
+
+export const ConstraintPresets = {
+  /**
+   * 固定约束 - 所有自由度完全固定
+   * @param largeNumber 刚性刚度值（默认1e20）
+   */
+  FIXED: (largeNumber: number = 1e20): Matrix6x6 => [
+    [largeNumber, 0, 0, 0, 0, 0],
+    [0, largeNumber, 0, 0, 0, 0],
+    [0, 0, largeNumber, 0, 0, 0],
+    [0, 0, 0, largeNumber, 0, 0],
+    [0, 0, 0, 0, largeNumber, 0],
+    [0, 0, 0, 0, 0, largeNumber]
+  ],
+
+  /**
+   * 铰接约束 - 仅约束平动，转动自由
+   * @param k 平动刚度值（默认1e6）
+   */
+  HINGE: (k: number = 1e6): Matrix6x6 => [
+    [k, 0, 0, 0, 0, 0],
+    [0, k, 0, 0, 0, 0],
+    [0, 0, k, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0]
+  ],
+
+  /**
+   * 滚动约束 - 仅约束部分平动（X方向）
+   * @param k 平动刚度值（默认1e6）
+   */
+  ROLLER: (k: number = 1e6): Matrix6x6 => [
+    [k, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0]
+  ],
+
+  /**
+   * 弹性约束 - 指定各自由度刚度
+   */
+  ELASTIC: (kx: number, ky: number, kz: number,
+            krx: number, kry: number, krz: number): Matrix6x6 => [
+    [kx, 0, 0, 0, 0, 0],
+    [0, ky, 0, 0, 0, 0],
+    [0, 0, kz, 0, 0, 0],
+    [0, 0, 0, krx, 0, 0],
+    [0, 0, 0, 0, kry, 0],
+    [0, 0, 0, 0, 0, krz]
+  ],
+
+  /**
+   * 隔震支座 - 特殊刚度分布
+   * @param kh 水平刚度
+   * @param kv 竖向刚度
+   * @param kt 转动刚度
+   */
+  ISOLATOR: (kh: number, kv: number, kt: number): Matrix6x6 => [
+    [kh, 0, 0, 0, 0, 0],
+    [0, kh, 0, 0, 0, 0],
+    [0, 0, kv, 0, 0, 0],
+    [0, 0, 0, kt, 0, 0],
+    [0, 0, 0, 0, kt, 0],
+    [0, 0, 0, 0, 0, kt]
+  ]
+};
+
+// ============================================================================
+// 三维向量（位置、方向等）
+// ============================================================================
+
 export interface Vector3D {
   x: number;
   y: number;
   z: number;
 }
 
-// 六维向量
+// ============================================================================
+// 六维弹簧刚度向量 - 杆端释放使用
+// ============================================================================
+
 export interface Vector6D {
-  xx: number;  // 弯曲分量
-  xy: number;  // 剪切分量
-  xz: number;  // 扭剪分量
-  yx: number;  // 扭剪分量
-  yy: number;  // 扭剪分量
-  yz: number;  // 扭剪分量
-  zx: number;  // 扭剪分量
-  zy: number;  // 扭剪刚度
+  ux: number;  // X方向平动弹簧刚度
+  uy: number;  // Y方向平动弹簧刚度
+  uz: number;  // Z方向平动弹簧刚度
+  rx: number;  // X方向转动弹簧刚度
+  ry: number;  // Y方向转动弹簧刚度
+  rz: number;  // Z方向转动弹簧刚度
 }
 
 // 方向枚举（用于计算长度）
