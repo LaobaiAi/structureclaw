@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
 import math
-from .constants import (
+
+# 添加当前目录路径用于同级导入
+current_path = Path(__file__).parent
+if str(current_path) not in sys.path:
+    sys.path.insert(0, str(current_path))
+
+from constants import (
     ConstraintType,
     RollingDirection,
     get_length_factor,

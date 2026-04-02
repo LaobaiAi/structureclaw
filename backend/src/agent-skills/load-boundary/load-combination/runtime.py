@@ -1,17 +1,10 @@
-"""
-荷载组合技能运行时
-Load Combination Skill Runtime
-实现荷载组合生成功能，基于 GB50009-2012 和 GB50011-2010
-"""
-
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# 添加核心模块路径
-core_path = Path(__file__).parent.parent / "core"
-if str(core_path) not in sys.path:
-    sys.path.insert(0, str(core_path))
+current_path = Path(__file__).parent
+if str(current_path) not in sys.path:
+    sys.path.insert(0, str(current_path))
 
 from load_combination_enhanced import (
     LoadCombinationGenerator,
@@ -21,15 +14,6 @@ from load_combination_enhanced import (
 
 
 def generate_load_combinations(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    生成荷载组合
-    
-    Args:
-        params: 输入参数字典
-        
-    Returns:
-        组合结果字典
-    """
     try:
         # 提取输入参数
         load_cases = params.get("load_cases", {})
@@ -160,15 +144,6 @@ def generate_load_combinations(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def expand_load_cases(load_cases: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    展开工况
-    
-    Args:
-        load_cases: 荷载工况字典
-        
-    Returns:
-        展开后的工况字典
-    """
     try:
         generator = LoadCombinationGenerator()
         return generator.expand_load_cases_for_combination(load_cases)
@@ -192,17 +167,6 @@ def process_custom_combinations(
     combination_method: str,
     base_combinations: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    """
-    处理自定义工况组合
-    
-    Args:
-        custom_load_ids: 自定义荷载工况ID列表
-        combination_method: 组合方式 (superpose/rotate/combine)
-        base_combinations: 基础组合列表
-        
-    Returns:
-        处理后的组合列表
-    """
     try:
         method = CombinationMethod(combination_method.lower())
         generator = LoadCombinationGenerator()
@@ -243,16 +207,6 @@ def generate_special_member_combinations(
     load_cases: Dict[str, Any],
     member_type: str = "wind_column"
 ) -> Dict[str, Any]:
-    """
-    生成特殊构件组合
-    
-    Args:
-        load_cases: 荷载工况字典
-        member_type: 特殊构件类型
-        
-    Returns:
-        组合结果字典
-    """
     try:
         generator = LoadCombinationGenerator()
         
@@ -293,18 +247,6 @@ def create_custom_combination(
     combination_type: str = "uls",
     code_reference: str = "custom"
 ) -> Dict[str, Any]:
-    """
-    创建自定义组合
-    
-    Args:
-        factors: 荷载系数字典
-        description: 组合描述
-        combination_type: 组合类型
-        code_reference: 规范条文号
-        
-    Returns:
-        组合字典
-    """
     try:
         generator = LoadCombinationGenerator()
         combo = generator.create_custom_combination(
@@ -325,90 +267,3 @@ def create_custom_combination(
             "error": str(e),
             "message": f"创建自定义组合时发生错误: {str(e)}"
         }
-
-
-# 主函数入口
-if __name__ == "__main__":
-    # 测试示例
-    
-    # 示例 1: 基础 ULS 组合
-    print("=" * 60)
-    print("示例 1: 基础 ULS 组合")
-    print("=" * 60)
-    
-    result1 = generate_load_combinations({
-        "load_cases": {
-            "dead_load": ["LC_DE"],
-            "live_load": ["LC_LL"],
-            "wind_load": ["LC_WX"]
-        },
-        "combination_type": "uls"
-    })
-    
-    print(f"状态: {result1['status']}")
-    print(f"组合数量: {result1.get('summary', {}).get('total', 0)}")
-    print("\n生成的组合:")
-    for combo in result1.get("combinations", [])[:3]:
-        print(f"  - {combo['id']}: {combo['description']}")
-        print(f"    系数: {combo['factors']}")
-    
-    # 示例 2: 包含地震的组合
-    print("\n" + "=" * 60)
-    print("示例 2: 包含地震的组合")
-    print("=" * 60)
-    
-    result2 = generate_load_combinations({
-        "load_cases": {
-            "dead_load": ["LC_DE"],
-            "live_load": ["LC_LL"],
-            "seismic_load": ["LC_EX"]
-        },
-        "combination_type": "all"
-    })
-    
-    print(f"状态: {result2['status']}")
-    print(f"组合数量: {result2.get('summary', {})}")
-    
-    # 示例 3: 展开工况
-    print("\n" + "=" * 60)
-    print("示例 3: 展开工况")
-    print("=" * 60)
-    
-    result3 = generate_load_combinations({
-        "load_cases": {
-            "dead_load": ["LC_DE"],
-            "live_load": ["LC_LL"],
-            "wind_load": ["LC_WX"]
-        },
-        "combination_type": "uls",
-        "expand_cases": True
-    })
-    
-    print(f"状态: {result3['status']}")
-    print(f"展开工况数量: {len(result3.get('expanded_cases', {}))}")
-    print("\n展开的工况:")
-    for exp_id, exp_data in list(result3.get("expanded_cases", {}).items())[:3]:
-        print(f"  - {exp_id}: {exp_data['description']}")
-    
-    # 示例 4: 自定义组合系数
-    print("\n" + "=" * 60)
-    print("示例 4: 自定义组合系数")
-    print("=" * 60)
-    
-    result4 = generate_load_combinations({
-        "load_cases": {
-            "dead_load": ["LC_DE"],
-            "live_load": ["LC_LL"]
-        },
-        "combination_factors": {
-            "gamma_g": 1.35,
-            "gamma_q": 1.4
-        }
-    })
-    
-    print(f"状态: {result4['status']}")
-    print(f"使用的系数: {result4.get('factors', {})}")
-    
-    print("\n" + "=" * 60)
-    print("所有测试完成")
-    print("=" * 60)

@@ -1,42 +1,75 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
-from .constants import (
-    MATERIAL_DENSITIES,
-    LINEAR_LOAD_CONVERSION,
+
+current_path = Path(__file__).parent
+shared_path = current_path.parent / "shared"
+import sys
+if str(shared_path) not in sys.path:
+    sys.path.insert(0, str(shared_path))
+
+from base_generator import LoadGeneratorBase
+from constants import (
     LoadDirection,
     LoadType,
-    LoadCaseID,
-    ElementType,
-    get_material_density,
     validate_load_value,
     validate_element_type
 )
-from ..shared.model_data_helper import ModelDataHelper, GeometryHelper
+from model_data_helper import ModelDataHelper, GeometryHelper
 
 logger = logging.getLogger(__name__)
 
 
-class DeadLoadGenerator:
-    """恒载生成器 / Dead Load Generator"""
-
+class DeadLoadGenerator(LoadGeneratorBase):
     def __init__(self, model: StructureModelV2):
-        """
-        初始化恒载生成器
-
-        Args:
-            model: V2 结构模型
-        """
-        self.model = model
-        self.load_cases = {}
-        self.load_actions = []
-
-        # 使用共享数据辅助类
+        super().__init__(model)
         self._model_helper = ModelDataHelper(model)
         self._model_helper.preload_data()
+
+    def generate_loads(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        case_id = parameters.get("case_id", "LC_DE")
+        case_name = parameters.get("case_name", "恒载工况")
+        description = parameters.get("description", "结构自重及永久荷载")
+        include_self_weight = parameters.get("include_self_weight", True)
+
+        if include_self_weight:
+            result = self.generate_self_weight_loads(
+                case_id=case_id,
+                case_name=case_name,
+                description=description
+            )
+        else:
+            self._ensure_load_case_exists(case_id, "dead", description)
+            result = {
+                "load_case": self.load_cases[case_id],
+                "load_actions": []
+            }
+
+        uniform_loads = parameters.get("uniform_loads", [])
+        for load_def in uniform_loads:
+            self.add_uniform_dead_load(
+                element_id=load_def["element_id"],
+                element_type=load_def.get("element_type", "beam"),
+                load_value=load_def["load_value"],
+                load_direction=load_def.get("load_direction"),
+                case_id=case_id,
+                case_name=case_name
+            )
+
+        return {
+            "status": "success",
+            "load_cases": self.load_cases,
+            "load_actions": self.load_actions,
+            "summary": {
+                "case_count": len(self.load_cases),
+                "action_count": len(self.load_actions),
+                "case_id": case_id
+            }
+        }
 
     def generate_self_weight_loads(
         self,
@@ -44,58 +77,38 @@ class DeadLoadGenerator:
         case_name: str = "恒载工况",
         description: str = "结构自重及永久荷载"
     ) -> Dict[str, Any]:
-        """
-        生成结构自重荷载工况
+        logger.info(f"Generating self-weight loads: {case_id}")
 
-        Args:
-            case_id: 荷载工况ID
-            case_name: 荷载工况名称
-            description: 荷载工况描述
-
-        Returns:
-            荷载工况和荷载动作
-        """
-        logger.info(f"Generating self-weight loads for case: {case_id}")
-
-        # 创建荷载工况 - 对齐 V2 Schema
         load_case = {
             "id": case_id,
-            "type": "dead",  # 对齐 V2 Schema LoadCaseV2.type
+            "type": "dead",
             "description": description,
             "loads": []
         }
 
-        # 遍历所有构件，计算自重
         for elem in self.model.elements:
             try:
-                # 获取构件材料（使用共享工具类）
                 material = self._model_helper.get_material(elem.material)
                 if not material:
-                    logger.warning(f"Material '{elem.material}' not found for element '{elem.id}'")
                     continue
 
-                # 获取构件截面（使用共享工具类）
                 section = self._model_helper.get_section(elem.section)
                 if not section:
-                    logger.warning(f"Section '{elem.section}' not found for element '{elem.id}'")
                     continue
 
-                # 计算自重荷载
                 load_action = self._calculate_self_weight(
                     element=elem,
                     material=material,
-                    section=section
+                    section=section,
+                    case_id=case_id
                 )
 
                 if load_action:
                     load_case["loads"].append(load_action)
-                    self.load_actions.append(load_action)
+                    self._add_load_action(load_action)
 
-            except (ValueError, ArithmeticError) as error:
-                logger.error(f"计算构件 '{elem.id}' 的自重时发生数值错误: {error}")
-                continue
-            except RuntimeError as error:
-                logger.error(f"计算构件 '{elem.id}' 的自重时发生运行时错误: {error}")
+            except (ValueError, ArithmeticError, RuntimeError) as error:
+                logger.debug(f"Element {elem.id}: {error}")
                 continue
 
         self.load_cases[case_id] = load_case
@@ -115,31 +128,6 @@ class DeadLoadGenerator:
         case_id: str = "LC_DE",
         case_name: str = "恒载工况"
     ) -> Dict[str, Any]:
-        """
-        添加均布恒载
-
-        Args:
-            element_id: 单元ID
-            element_type: 单元类型 (beam, column, etc.)
-            load_value: 荷载值 (kN/m)
-            load_direction: 荷载方向向量
-            case_id: 荷载工况ID
-            case_name: 荷载工况名称
-
-        Returns:
-            荷载动作
-
-        Raises:
-            ValueError: 当输入参数无效时
-
-        Examples:
-            >>> generator.add_uniform_dead_load(
-            ...     element_id="B1",
-            ...     element_type="beam",
-            ...     load_value=10.5
-            ... )
-        """
-        # 参数验证
         self._validate_parameters(
             element_id=element_id,
             element_type=element_type,
@@ -147,34 +135,23 @@ class DeadLoadGenerator:
             load_direction=load_direction
         )
 
-        # 设置默认荷载方向（重力方向）
         if load_direction is None:
             load_direction = LoadDirection.GRAVITY
 
-        load_action = {
-            "id": f"LA_{element_id}_DE",
-            "caseId": case_id,
-            "elementType": element_type,
-            "elementId": element_id,
-            "loadType": "distributed_load",
-            "loadValue": load_value,
-            "loadDirection": load_direction
-        }
+        self._ensure_load_case_exists(case_id, "dead", case_name)
 
-        self.load_actions.append(load_action)
+        load_action = self._create_load_action(
+            element_id=element_id,
+            element_type=element_type,
+            load_type=LoadType.DISTRIBUTED_LOAD,
+            load_value=load_value,
+            load_direction=load_direction,
+            case_id=case_id,
+            description=f"恒载: {load_value:.3f} kN/m"
+        )
 
-        # 确保荷载工况存在
-        if case_id not in self.load_cases:
-            self.load_cases[case_id] = {
-                "id": case_id,
-                "type": "dead",
-                "description": case_name,
-                "loads": []
-            }
-
-        self.load_cases[case_id]["loads"].append(load_action)
-
-        logger.info(f"Added dead load: {load_value} kN/m on element {element_id}")
+        self._add_load_action(load_action)
+        logger.debug(f"Dead load {load_value} on {element_id}")
         return load_action
 
     def add_point_dead_load(
@@ -186,218 +163,81 @@ class DeadLoadGenerator:
         load_direction: Optional[Dict[str, float]] = None,
         case_id: str = "LC_DE"
     ) -> Dict[str, Any]:
-        """
-        添加集中恒载
-
-        Args:
-            element_id: 单元ID
-            element_type: 单元类型
-            load_value: 荷载值 (kN)
-            position: 作用位置
-            load_direction: 荷载方向向量
-            case_id: 荷载工况ID
-
-        Returns:
-            荷载动作
-
-        Raises:
-            ValueError: 当输入参数无效时
-        """
-        # 参数验证
         self._validate_parameters(
             element_id=element_id,
             element_type=element_type,
             load_value=load_value,
-            load_direction=load_direction
+            load_direction=load_direction,
+            load_type=LoadType.POINT_FORCE
         )
 
-        # 设置默认荷载方向（重力方向）
         if load_direction is None:
             load_direction = LoadDirection.GRAVITY
 
-        load_action = {
-            "id": f"LA_{element_id}_DE_POINT",
-            "caseId": case_id,
-            "elementType": element_type,
-            "elementId": element_id,
-            "loadType": "point_force",
-            "loadValue": load_value,
-            "loadDirection": load_direction,
-            "position": position
-        }
+        self._ensure_load_case_exists(case_id, "dead", f"恒载工况 {case_id}")
 
-        self.load_actions.append(load_action)
-        self.load_cases[case_id]["loads"].append(load_action)
+        load_action = self._create_load_action(
+            element_id=element_id,
+            element_type=element_type,
+            load_type=LoadType.POINT_FORCE,
+            load_value=load_value,
+            load_direction=load_direction,
+            case_id=case_id,
+            extra_fields={"position": position},
+            description=f"集中恒载: {load_value:.3f} kN"
+        )
 
-        logger.info(f"Added point dead load: {load_value} kN on element {element_id} at {position}")
+        self._add_load_action(load_action)
+        logger.debug(f"Point dead load {load_value} on {element_id}")
         return load_action
-
-    def get_load_cases(self) -> Dict[str, Any]:
-        """获取所有荷载工况"""
-        return self.load_cases
-
-    def get_load_actions(self) -> list:
-        """获取所有荷载动作"""
-        return self.load_actions
 
     def _calculate_self_weight(
         self,
         element: Any,
         material: Any,
-        section: Any
-    ) -> Dict[str, Any]:
-        """
-        计算构件自重
+        section: Any,
+        case_id: str = "LC_DE"
+    ) -> Optional[Dict[str, Any]]:
+        from constants import get_material_density, LINEAR_LOAD_CONVERSION
 
-        Args:
-            element: 单元
-            material: 材料
-            section: 截面
-
-        Returns:
-            荷载动作字典
-        """
-        # 获取材料密度
-        density = MATERIAL_DENSITIES.get(material.category, 2500)
+        density = get_material_density(material.category)
         if hasattr(material, 'rho') and material.rho:
             density = material.rho
 
-        # 使用共享几何辅助类计算截面面积
         area = GeometryHelper.calculate_section_area(section)
-
         if area is None or area <= 0:
-            logger.warning(f"Cannot calculate area for section '{section.id}'")
             return None
 
-        # 计算线荷载 (kN/m)
-        # 线荷载 = 密度 * g * 截面积 * 转换系数 (kg/m³ * m/s² * mm² = kN/m)
-        linear_load = density * LINEAR_LOAD_CONVERSION * area  # 使用常量
+        linear_load = density * LINEAR_LOAD_CONVERSION * area
 
-        # 创建荷载动作
-        load_action = {
-            "id": f"LA_{element.id}_SW",
-            "caseId": "LC_DE",
-            "elementType": element.type,
-            "elementId": element.id,
-            "loadType": "distributed_load",
-            "loadValue": linear_load,
-            "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0},  # 重力方向向下
-            "description": f"自重: {linear_load:.4f} kN/m"
-        }
-
-        return load_action
+        return self._create_load_action(
+            element_id=element.id,
+            element_type=element.type,
+            load_type=LoadType.DISTRIBUTED_LOAD,
+            load_value=linear_load,
+            load_direction=LoadDirection.GRAVITY,
+            case_id=case_id,
+            description=f"自重: {linear_load:.4f} kN/m"
+        )
 
     def _validate_parameters(
         self,
         element_id: str,
         element_type: str,
         load_value: float,
-        load_direction: Optional[Dict[str, float]] = None
+        load_direction: Optional[Dict[str, float]] = None,
+        load_type: str = LoadType.DISTRIBUTED_LOAD
     ) -> None:
-        """
-        验证输入参数
+        from constants import validate_element_type, validate_load_value, validate_string_id, validate_dict_value
 
-        Args:
-            element_id: 单元ID
-            element_type: 单元类型
-            load_value: 荷载值
-            load_direction: 荷载方向向量
-
-        Raises:
-            ValueError: 当参数无效时
-            TypeError: 当参数类型错误时
-        """
-        # 验证 element_id
-        if not element_id or not isinstance(element_id, str):
-            raise TypeError(f"单元ID必须是非空字符串，得到: {type(element_id)}")
-
-        # 验证 element_type
+        validate_string_id(element_id, "单元ID")
         validate_element_type(element_type)
+        validate_load_value(load_value, load_type)
 
-        # 验证 load_value
-        validate_load_value(load_value, LoadType.DISTRIBUTED_LOAD)
-
-        # 验证 load_direction
         if load_direction is not None:
-            if not isinstance(load_direction, dict):
-                raise TypeError(f"荷载方向必须是字典类型，得到: {type(load_direction)}")
-
-            required_keys = ['x', 'y', 'z']
-            if not all(k in load_direction for k in required_keys):
-                raise ValueError(
-                    f"荷载方向必须包含 {required_keys} 键，得到: {list(load_direction.keys())}"
-                )
-
-            # 验证方向向量是数字
-            for key, value in load_direction.items():
-                if not isinstance(value, (int, float)):
-                    raise TypeError(
-                        f"荷载方向的 {key} 值必须是数字类型，得到: {type(value)}"
-                    )
+            validate_dict_value(load_direction, "荷载方向", ['x', 'y', 'z'])
 
 
 def generate_dead_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    生成恒载的主函数
-
-    Args:
-        model: V2 结构模型
-        parameters: 参数字典
-            - case_id: 荷载工况ID (可选)
-            - case_name: 荷载工况名称 (可选)
-            - include_self_weight: 是否包含自重 (默认 True)
-            - uniform_loads: 均布荷载列表 (可选)
-
-    Returns:
-        生成结果
-    """
     generator = DeadLoadGenerator(model)
-
-    # 参数解析
-    case_id = parameters.get("case_id", "LC_DE")
-    case_name = parameters.get("case_name", "恒载工况")
-    description = parameters.get("description", "结构自重及永久荷载")
-    include_self_weight = parameters.get("include_self_weight", True)
-
-    # 生成自重荷载
-    if include_self_weight:
-        result = generator.generate_self_weight_loads(
-            case_id=case_id,
-            case_name=case_name,
-            description=description
-        )
-    else:
-        # 创建空的荷载工况
-        generator.load_cases[case_id] = {
-            "id": case_id,
-            "type": "dead",
-            "description": description,
-            "loads": []
-        }
-        result = {
-            "load_case": generator.load_cases[case_id],
-            "load_actions": []
-        }
-
-    # 添加额外的均布荷载
-    uniform_loads = parameters.get("uniform_loads", [])
-    for load_def in uniform_loads:
-        generator.add_uniform_dead_load(
-            element_id=load_def["element_id"],
-            element_type=load_def.get("element_type", "beam"),
-            load_value=load_def["load_value"],
-            load_direction=load_def.get("load_direction"),
-            case_id=case_id,
-            case_name=case_name
-        )
-
-    return {
-        "status": "success",
-        "load_cases": generator.get_load_cases(),
-        "load_actions": generator.get_load_actions(),
-        "summary": {
-            "case_count": len(generator.get_load_cases()),
-            "action_count": len(generator.get_load_actions()),
-            "case_id": case_id
-        }
-    }
+    return generator.generate_loads(parameters)
