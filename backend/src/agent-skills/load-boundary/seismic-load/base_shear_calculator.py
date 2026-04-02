@@ -15,12 +15,7 @@ from .constants import (
     KG_TO_KN,
     MM2_TO_M2,
     DEFAULT_TOTAL_WEIGHT,
-    DEFAULT_SECTION_AREA,
-    DAMPING_ADJUSTMENT_CONST1,
-    DAMPING_ADJUSTMENT_CONST2,
-    DAMPING_ADJUSTMENT_CONST3,
-    DAMPING_ADJUSTMENT_CONST4,
-    DAMPING_ADJUSTMENT_MIN
+    DEFAULT_SECTION_AREA
 )
 
 logger = logging.getLogger(__name__)
@@ -137,10 +132,9 @@ class BaseShearCalculator:
         # 阻尼调整系数 (GB 50011-2010 公式 5.1.5-3)
         if damping_ratio != 0.05:
             # η_1 = 0.02 + (0.05 - ζ) / (1 + 3ζ)
-            eta1 = (DAMPING_ADJUSTMENT_CONST1 +
-                   (DAMPING_ADJUSTMENT_CONST2 - damping_ratio) /
-                   (DAMPING_ADJUSTMENT_CONST3 + DAMPING_ADJUSTMENT_CONST4 * damping_ratio))
-            eta1 = max(eta1, DAMPING_ADJUSTMENT_MIN)
+            # Where ζ is damping ratio
+            eta1 = (0.02 + (0.05 - damping_ratio) / (1.0 + 3.0 * damping_ratio))
+            eta1 = max(eta1, 0.55)
             base_shear *= eta1
 
         logger.info(

@@ -77,12 +77,8 @@ LIVE_LOAD_FACTOR_MAX = 1.0
 # 规范常量 / Code Constants (GB 50011-2010)
 # ===========================================================================
 
-# 阻尼调整系数计算常量
-DAMPING_ADJUSTMENT_CONST1 = 0.02
-DAMPING_ADJUSTMENT_CONST2 = 0.05
-DAMPING_ADJUSTMENT_CONST3 = 1.0
-DAMPING_ADJUSTMENT_CONST4 = 3.0
-DAMPING_ADJUSTMENT_MIN = 0.55
+# 阻尼调整系数 η_1 = 0.02 + (0.05 - ζ) / (1 + 3ζ), 最小值 0.55
+# 已在 base_shear_calculator.py 中直接使用公式
 
 # 活载组合值系数常用值
 LIVE_LOAD_FACTOR_RESIDENTIAL = 0.5
