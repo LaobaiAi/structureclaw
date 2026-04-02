@@ -5,14 +5,49 @@ Load-Boundary 共享模块 / Load-Boundary Shared Module
 用于消除代码重复，提高代码复用性和可维护性。
 """
 
-from .model_data_helper import (
-    ModelDataHelper,
-    GeometryHelper,
-    ValidationHelper
+from .model_data_helper_new import ModelDataHelper
+from .model_fetcher import ModelDataFetcher, V2SchemaFetcher, FilteredDataFetcher
+from .model_cache import ModelDataCache, MaterialCache, SectionCache, NodeCache, StoryCache, SimpleDictCache
+from .geometry_helper import GeometryHelper
+from .validation_helper import ValidationHelper
+from .constants import (
+    LoadType,
+    ElementType,
+    LoadDirection,
+    validate_load_value,
+    validate_element_type,
+    validate_string_id,
+    validate_dict_value,
+    validate_numeric_value,
+    MIN_LOAD_VALUE,
+    MAX_DISTRIBUTED_LOAD,
+    MAX_POINT_LOAD,
+    MAX_AREA_LOAD,
 )
 
 __all__ = [
     "ModelDataHelper",
+    "ModelDataFetcher",
+    "V2SchemaFetcher",
+    "FilteredDataFetcher",
+    "ModelDataCache",
+    "MaterialCache",
+    "SectionCache",
+    "NodeCache",
+    "StoryCache",
+    "SimpleDictCache",
     "GeometryHelper",
-    "ValidationHelper"
+    "ValidationHelper",
+    "LoadType",
+    "ElementType",
+    "LoadDirection",
+    "validate_load_value",
+    "validate_element_type",
+    "validate_string_id",
+    "validate_dict_value",
+    "validate_numeric_value",
+    "MIN_LOAD_VALUE",
+    "MAX_DISTRIBUTED_LOAD",
+    "MAX_POINT_LOAD",
+    "MAX_AREA_LOAD",
 ]

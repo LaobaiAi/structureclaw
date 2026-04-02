@@ -12,6 +12,8 @@ Load-Boundary 测试套件运行器 / Load-Boundary Test Suite Runner
 
 import sys
 import os
+import importlib.util
+import traceback
 from pathlib import Path
 
 
@@ -32,7 +34,6 @@ def run_test_suite(test_name: str, test_module_path: str) -> bool:
 
     try:
         # 导入测试模块
-        import importlib.util
         spec = importlib.util.spec_from_file_location(test_name, test_module_path)
         test_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(test_module)
@@ -45,9 +46,19 @@ def run_test_suite(test_name: str, test_module_path: str) -> bool:
             print(f"错误: 测试模块 {test_name} 缺少 run_tests() 函数")
             return False
 
+    except (ImportError, ModuleNotFoundError) as e:
+        print(f"错误: 无法导入测试模块 {test_name}: {e}")
+        return False
+    except (AttributeError, SyntaxError) as e:
+        print(f"错误: 测试模块 {test_name} 存在语法或属性错误: {e}")
+        traceback.print_exc()
+        return False
+    except RuntimeError as e:
+        print(f"错误: 运行测试套件 {test_name} 时发生运行时错误: {e}")
+        traceback.print_exc()
+        return False
     except Exception as e:
         print(f"错误: 运行测试套件 {test_name} 失败: {e}")
-        import traceback
         traceback.print_exc()
         return False
 
@@ -116,5 +127,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import importlib
     sys.exit(main())

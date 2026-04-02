@@ -26,8 +26,10 @@ def check_python_syntax(file_path):
         return True, None
     except SyntaxError as e:
         return False, f"Syntax error at line {e.lineno}: {e.msg}"
-    except Exception as e:
-        return False, str(e)
+    except (OSError, IOError, UnicodeDecodeError) as e:
+        return False, f"文件读取错误: {str(e)}"
+    except (SyntaxError, MemoryError) as e:
+        return False, f"解析错误: {str(e)}"
 
 
 def check_imports(file_path):
