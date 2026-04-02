@@ -396,42 +396,7 @@ export class StiffnessMatrixUtils {
   }
 }
 
-  /**
-   * 判断刚度矩阵是否为刚性（固定约束）
-   * @param matrix 刚度矩阵
-   * @param threshold 刚性阈值（默认1e15）
-   * @returns 是否为刚性约束
-   */
-  static isRigidMatrix(matrix: Matrix6x6, threshold: number = 1e15): boolean {
-    // 检查所有对角元素是否大于阈值
-    for (let i = 0; i < 6; i++) {
-      if (matrix[i][i] < threshold) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * 验证刚度矩阵的有效性
-   * @param matrix 刚度矩阵
-   * @returns 是否有效
-   */
-  static validateMatrix(matrix: Matrix6x6): boolean {
-    if (!Array.isArray(matrix) || matrix.length !== 6) {
-      return false;
-    }
-    for (let i = 0; i < 6; i++) {
-      if (!Array.isArray(matrix[i]) || matrix[i].length !== 6) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
-// ============================================================================
-// 预定义约束模板
+// ============================================================================// 预定义约束模板
 // ============================================================================
 
 export const ConstraintPresets = {
@@ -439,7 +404,7 @@ export const ConstraintPresets = {
    * 固定约束 - 所有自由度完全固定
    * @param largeNumber 刚性刚度值（默认1e20）
    */
-  FIXED: (largeNumber: number = 1e20): Matrix6x6 => [
+  FIXED: (largeNumber: number = 1e20): Matrix6x6Array => [
     [largeNumber, 0, 0, 0, 0, 0],
     [0, largeNumber, 0, 0, 0, 0],
     [0, 0, largeNumber, 0, 0, 0],
@@ -452,7 +417,7 @@ export const ConstraintPresets = {
    * 铰接约束 - 仅约束平动，转动自由
    * @param k 平动刚度值（默认1e6）
    */
-  HINGE: (k: number = 1e6): Matrix6x6 => [
+  HINGE: (k: number = 1e6): Matrix6x6Array => [
     [k, 0, 0, 0, 0, 0],
     [0, k, 0, 0, 0, 0],
     [0, 0, k, 0, 0, 0],
@@ -465,7 +430,7 @@ export const ConstraintPresets = {
    * 滚动约束 - 仅约束部分平动（X方向）
    * @param k 平动刚度值（默认1e6）
    */
-  ROLLER: (k: number = 1e6): Matrix6x6 => [
+  ROLLER: (k: number = 1e6): Matrix6x6Array => [
     [k, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0],
@@ -478,7 +443,7 @@ export const ConstraintPresets = {
    * 弹性约束 - 指定各自由度刚度
    */
   ELASTIC: (kx: number, ky: number, kz: number,
-            krx: number, kry: number, krz: number): Matrix6x6 => [
+            krx: number, kry: number, krz: number): Matrix6x6Array => [
     [kx, 0, 0, 0, 0, 0],
     [0, ky, 0, 0, 0, 0],
     [0, 0, kz, 0, 0, 0],
@@ -493,7 +458,7 @@ export const ConstraintPresets = {
    * @param kv 竖向刚度
    * @param kt 转动刚度
    */
-  ISOLATOR: (kh: number, kv: number, kt: number): Matrix6x6 => [
+  ISOLATOR: (kh: number, kv: number, kt: number): Matrix6x6Array => [
     [kh, 0, 0, 0, 0, 0],
     [0, kh, 0, 0, 0, 0],
     [0, 0, kv, 0, 0, 0],
