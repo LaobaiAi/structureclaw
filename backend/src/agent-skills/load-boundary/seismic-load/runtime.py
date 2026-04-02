@@ -30,6 +30,11 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         force_distribute_method: Optional[ForceDistributeMethod] = None
     ):
         super().__init__(model)
+
+        # 初始化模型数据助手（避免重复创建）
+        from model_data_helper import ModelDataHelper
+        self.model_helper = ModelDataHelper(model)
+
         self.base_shear_calculator = BaseShearCalculator(
             model,
             weight_calculation_method or WeightCalculationMethod.AUTO
@@ -189,17 +194,14 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         return story_forces
 
     def _calculate_story_weight(self, elements: list) -> float:
-        from model_data_helper import ModelDataHelper, GeometryHelper
-
         total_weight = 0.0
-        model_helper = ModelDataHelper(self.model)
 
         for elem in elements:
             if elem.type not in ["beam", "column", "wall", "slab"]:
                 continue
 
-            material = model_helper.get_material(elem.material)
-            section = model_helper.get_section(elem.section)
+            material = self.model_helper.get_material(elem.material)
+            section = self.model_helper.get_section(elem.section)
 
             if not material or not section:
                 continue
@@ -216,10 +218,9 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         section: Any
     ) -> float:
         from constants import KG_TO_KN
-        from model_data_helper import ModelDataHelper, GeometryHelper
+        from model_data_helper import GeometryHelper
 
-        model_helper = ModelDataHelper(self.model)
-        elem_length = GeometryHelper.calculate_element_length(element, model_helper)
+        elem_length = GeometryHelper.calculate_element_length(element, self.model_helper)
         if elem_length is None or elem_length <= 0:
             return 0.0
 
