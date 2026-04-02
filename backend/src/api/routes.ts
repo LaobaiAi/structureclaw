@@ -10,9 +10,11 @@ import { analysisEngineRoutes } from './analysis-engine.js';
 import { adminDatabaseRoutes } from './admin-database.js';
 import { modelRoutes } from './models.js';
 import { analysisRuntimeCompatibilityRoutes } from './analysis-runtime.js';
+import { loadBoundaryRoutes } from './skill-load-boundary.js';
 
 export async function registerRoutes(fastify: FastifyInstance) {
   await fastify.register(analysisRuntimeCompatibilityRoutes);
+  await fastify.register(loadBoundaryRoutes);
 
   // API 版本前缀
   const apiPrefix = '/api/v1';
@@ -39,6 +41,7 @@ export async function registerRoutes(fastify: FastifyInstance) {
       chat: `${apiPrefix}/chat`,
       projects: `${apiPrefix}/projects`,
       skills: `${apiPrefix}/skills`,
+      loadBoundary: `${apiPrefix}/skills/load-boundary`,
       analysis: `${apiPrefix}/analysis`,
       analysisEngines: `${apiPrefix}/analysis-engines`,
       agent: `${apiPrefix}/agent`,
