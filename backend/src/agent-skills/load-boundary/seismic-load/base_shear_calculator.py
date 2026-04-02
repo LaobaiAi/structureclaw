@@ -131,11 +131,11 @@ class BaseShearCalculator:
 
         # 阻尼调整系数 (GB 50011-2010 公式 5.1.5-3)
         if damping_ratio != 0.05:
-            # η_1 = 0.02 + (0.05 - ζ) / (1 + 3ζ)
+            # η_2 = 1 + (0.05 - ζ) / (0.08 + 1.2ζ)
             # Where ζ is damping ratio
-            eta1 = (0.02 + (0.05 - damping_ratio) / (1.0 + 3.0 * damping_ratio))
-            eta1 = max(eta1, 0.55)
-            base_shear *= eta1
+            eta2 = 1.0 + (0.05 - damping_ratio) / (0.08 + 1.2 * damping_ratio)
+            eta2 = max(min(eta2, 1.5), 0.55)
+            base_shear *= eta2
 
         logger.info(
             f"底部剪力计算: "
@@ -153,7 +153,7 @@ class BaseShearCalculator:
             "alpha_max": alpha_max,
             "characteristic_period": characteristic_period,
             "alpha1": alpha1,
-            "damping_adjustment": eta1 if damping_ratio != 0.05 else 1.0,
+            "damping_adjustment": eta2 if damping_ratio != 0.05 else 1.0,
             "weight_calculation_method": method.value
         }
 
