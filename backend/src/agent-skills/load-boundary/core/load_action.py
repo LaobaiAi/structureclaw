@@ -7,6 +7,51 @@
 from typing import Any, Dict, Optional
 
 
+def create_load_action(
+    action_id: str,
+    case_id: str,
+    element_type: str,
+    element_id: str,
+    load_type: str,
+    load_value: float,
+    extra: Optional[Dict[str, Any]] = None,
+    load_direction: Optional[Dict[str, Any]] = None,
+    position: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    模块级工厂函数 - 创建荷载动作 (对齐 V2 Schema)
+
+    Args:
+        action_id: 动作ID
+        case_id: 所属工况ID
+        element_type: 单元类型
+        element_id: 单元ID
+        load_type: 荷载类型
+        load_value: 荷载值
+        extra: 扩展字段
+        load_direction: 荷载方向向量
+        position: 荷载位置
+
+    Returns:
+        荷载动作字典 (使用驼峰命名)
+    """
+    action = LoadAction(
+        action_id=action_id,
+        case_id=case_id,
+        element_type=element_type,
+        element_id=element_id,
+        load_type=load_type,
+        load_value=load_value,
+        extra=extra
+    )
+    result = action.to_dict()
+    if load_direction:
+        result["loadDirection"] = load_direction
+    if position:
+        result["position"] = position
+    return result
+
+
 class LoadAction:
     """荷载动作类 - 对齐 V2 Schema"""
 
