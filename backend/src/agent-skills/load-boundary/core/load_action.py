@@ -45,10 +45,10 @@ class LoadAction:
         load_direction: Optional[Dict[str, Any]] = None,
         position: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """创建荷载动作"""
+        """创建荷载动作 - 对齐 V2 Schema 格式"""
         result = self.to_dict()
         if load_direction:
-            result["load_direction"] = load_direction
+            result["loadDirection"] = load_direction
         if position:
             result["position"] = position
         return result
@@ -62,13 +62,13 @@ class LoadAction:
         return self.to_dict()
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典 - 使用下划线命名对齐 V2 Schema"""
+        """转换为字典 - 使用驼峰命名对齐 V2 Schema"""
         return {
             "id": self.action_id,
-            "case_id": self.case_id,
-            "element_type": self.element_type,
-            "element_id": self.element_id,
-            "load_type": self.load_type,
-            "load_value": self.load_value,
+            "caseId": self.case_id,
+            "elementType": self.element_type,
+            "elementId": self.element_id,
+            "loadType": self.load_type,
+            "loadValue": self.load_value,
             "extra": self.extra
         }

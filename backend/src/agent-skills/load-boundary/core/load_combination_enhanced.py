@@ -26,10 +26,10 @@ class CombinationFactor:
     
     def __init__(
         self,
-        gamma_g: float = 1.2,      # 恒载分项系数 (不利)
+        gamma_g: float = 1.3,      # 恒载分项系数 (不利) - 活载/风载控制组合
         gamma_g_favorable: float = 1.0,  # 恒载分项系数 (有利)
         gamma_q: float = 1.5,      # 活载分项系数
-        gamma_w: float = 1.4,      # 风载分项系数
+        gamma_w: float = 1.5,      # 风载分项系数
         gamma_eh: float = 1.3,     # 水平地震作用分项系数
         gamma_ev: float = 0.5,     # 竖向地震作用分项系数
         psi_live: float = 0.7,    # 活载组合值系数
@@ -255,7 +255,7 @@ class LoadCombinationGenerator:
         if dead_load_ids and crane_load_ids:
             for dead_id in dead_load_ids:
                 for crane_id in crane_load_ids:
-                    # 1.3*恒 + 1.5*吊
+                    # 1.3*恒 + 1.5*吊 (吊车单独控制)
                     combo = self._create_combination(
                         combination_type="uls",
                         description=f"吊车荷载控制: {crane_id}",

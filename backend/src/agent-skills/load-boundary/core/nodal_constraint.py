@@ -47,20 +47,32 @@ class NodalConstraint:
             self.restraints = kwargs['restraints']
         if 'stiffness' in kwargs:
             self.stiffness = kwargs['stiffness']
+        if 'constraint_type' in kwargs:
+            self.constraint_type = kwargs['constraint_type']
+        if 'restrained_dofs' in kwargs:
+            self.restrained_dofs = kwargs['restrained_dofs']
         if 'extra' in kwargs:
             self.extra = kwargs['extra']
         return self.to_dict()
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典 - 使用下划线命名，对齐 V2 Schema"""
+        """转换为字典 - 使用驼峰命名，对齐 V2 Schema"""
         result = {
-            "node_id": self.node_id,
-            "constraint_type": self.constraint_type,
-            "restrained_dofs": self.restrained_dofs,
+            "nodeId": self.node_id,
             "extra": self.extra
         }
+        
+        # V2 Schema 字段：restraints (优先使用)
         if self.restraints is not None:
             result["restraints"] = self.restraints
+        
+        # 扩展字段：constraintType, restrainedDOFs, stiffness
+        # 放入 extra 字段中，保持 V2 Schema 格式统一
+        if self.constraint_type:
+            result.setdefault("extra", {})["constraintType"] = self.constraint_type
+        if self.restrained_dofs:
+            result.setdefault("extra", {})["restrainedDOFs"] = self.restrained_dofs
         if self.stiffness is not None:
             result["stiffness"] = self.stiffness
+        
         return result

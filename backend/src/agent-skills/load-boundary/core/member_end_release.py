@@ -56,15 +56,25 @@ class MemberEndRelease:
         return self.to_dict()
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典 - 使用下划线命名，对齐 V2 Schema"""
+        """转换为字典 - 使用驼峰命名，对齐 V2 Schema"""
         result = {
-            "member_id": self.member_id,
-            "release_i": self.release_i,
-            "release_j": self.release_j,
+            "memberId": self.member_id,
             "extra": self.extra
         }
+        
+        # V2 Schema 字段：releases (优先使用)
+        if self.release_i or self.release_j:
+            releases = {}
+            if self.release_i:
+                releases["releaseI"] = self.release_i
+            if self.release_j:
+                releases["releaseJ"] = self.release_j
+            result["releases"] = releases
+        
+        # 扩展字段：springStiffnessI, springStiffnessJ
         if self.spring_stiffness_i is not None:
-            result["spring_stiffness_i"] = self.spring_stiffness_i
+            result["springStiffnessI"] = self.spring_stiffness_i
         if self.spring_stiffness_j is not None:
-            result["spring_stiffness_j"] = self.spring_stiffness_j
+            result["springStiffnessJ"] = self.spring_stiffness_j
+        
         return result

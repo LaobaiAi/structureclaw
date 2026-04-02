@@ -51,12 +51,12 @@ class EffectiveLength:
         return self.to_dict()
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典 - 使用下划线命名，对齐 V2 Schema"""
+        """转换为字典 - 使用驼峰命名，对齐 V2 Schema"""
         return {
-            "member_id": self.member_id,
+            "memberId": self.member_id,
             "direction": self.direction,
-            "calc_length": self.calc_length,
-            "length_factor": self.length_factor,
-            "effective_length": self.effective_length,
+            "calcLength": self.calc_length,
+            "lengthFactor": self.length_factor,
+            "effectiveLength": self.effective_length,
             "extra": self.extra
         }
