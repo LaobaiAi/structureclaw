@@ -15,21 +15,35 @@ This example demonstrates how to:
 4. Combine into complete load cases
 """
 
-from structure_protocol.structure_model_v2 import (
-    StructureModelV2,
-    NodeV2,
-    ElementV2,
-    MaterialV2,
-    SectionV2,
-    StoryDef,
-    ProjectInfo
+import sys
+from pathlib import Path
+
+from test_import_adapter import TestImportAdapter
+
+# 初始化导入适配器
+load_boundary_path = Path(__file__).parent.parent
+adapter = TestImportAdapter(load_boundary_path)
+
+# 导入结构协议类
+StructureModelV2, NodeV2, ElementV2, MaterialV2, SectionV2 = adapter.import_structure_protocol(
+    "StructureModelV2", "NodeV2", "ElementV2", "MaterialV2", "SectionV2"
 )
 
-from dead_load.runtime import generate_dead_loads
-from live_load.runtime import generate_live_loads
-from wind_load.runtime import generate_wind_loads
-from seismic_load.runtime import generate_seismic_loads
-from boundary_condition.runtime import apply_boundary_conditions
+# 导入技能运行时
+dead_load_runtime = adapter.import_skill_runtime("dead-load")
+generate_dead_loads = dead_load_runtime.generate_dead_loads
+
+live_load_runtime = adapter.import_skill_runtime("live-load")
+generate_live_loads = live_load_runtime.generate_live_loads
+
+wind_load_runtime = adapter.import_skill_runtime("wind-load")
+generate_wind_loads = wind_load_runtime.generate_wind_loads
+
+seismic_load_runtime = adapter.import_skill_runtime("seismic-load")
+generate_seismic_loads = seismic_load_runtime.generate_seismic_loads
+
+boundary_condition_runtime = adapter.import_skill_runtime("boundary-condition")
+apply_boundary_conditions = boundary_condition_runtime.apply_boundary_conditions
 
 
 def create_sample_model():

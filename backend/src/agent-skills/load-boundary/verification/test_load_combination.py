@@ -7,17 +7,24 @@ Test Load Combination Skill
 import sys
 from pathlib import Path
 
-# 添加运行时模块路径
-runtime_path = Path(__file__).parent.parent / "load-combination"
-if str(runtime_path) not in sys.path:
-    sys.path.insert(0, str(runtime_path))
+from test_import_adapter import TestImportAdapter
 
-from runtime import (
-    generate_load_combinations,
-    expand_load_cases,
-    process_custom_combinations,
-    generate_special_member_combinations,
-    create_custom_combination
+# 初始化导入适配器
+load_boundary_path = Path(__file__).parent.parent
+adapter = TestImportAdapter(load_boundary_path)
+
+# 导入结构协议类
+StructureModelV2, LoadCaseV2, LoadCombinationV2 = adapter.import_structure_protocol(
+    "StructureModelV2", "LoadCaseV2", "LoadCombinationV2"
+)
+
+# 导入荷载组合运行时
+load_combination_runtime = adapter.import_skill_runtime("load-combination")
+generate_load_combinations = load_combination_runtime.generate_load_combinations
+expand_load_cases = load_combination_runtime.expand_load_cases
+process_custom_combinations = load_combination_runtime.process_custom_combinations
+generate_special_member_combinations = load_combination_runtime.generate_special_member_combinations
+create_custom_combination = load_combination_runtime.create_custom_combination
 )
 
 

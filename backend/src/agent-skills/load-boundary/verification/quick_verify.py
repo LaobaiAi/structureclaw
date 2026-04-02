@@ -28,7 +28,7 @@ def check_python_syntax(file_path):
         return False, f"Syntax error at line {e.lineno}: {e.msg}"
     except (OSError, IOError, UnicodeDecodeError) as e:
         return False, f"文件读取错误: {str(e)}"
-    except (SyntaxError, MemoryError) as e:
+    except MemoryError as e:
         return False, f"解析错误: {str(e)}"
 
 
@@ -139,8 +139,8 @@ def main():
     return 0 if all_passed else 1
 
 
-    if __name__ == "__main__":
-        # 设置标准输出编码
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-        sys.exit(main())
+if __name__ == "__main__":
+    # 设置标准输出编码
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.exit(main())

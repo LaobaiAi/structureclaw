@@ -4,11 +4,27 @@ Test suite for seismic load generator.
 Tests cover seismic load generation, validation, and error handling.
 """
 
-import pytest
-from typing import Dict, Any, List
-from backend.src.agent_skills.load_boundary.seismic_load.runtime import SeismicLoadGenerator
-from backend.src.agent_skills.load_boundary.core.load_action import create_load_action
-from backend.src.agent_runtime.types import StructureModelV2, LoadCaseV2, NodeV2, ElementV2, MaterialV2, SectionV2
+import sys
+from pathlib import Path
+
+from test_import_adapter import TestImportAdapter
+
+# 初始化导入适配器
+load_boundary_path = Path(__file__).parent.parent
+adapter = TestImportAdapter(load_boundary_path)
+
+# 导入结构协议类
+StructureModelV2, NodeV2, ElementV2, MaterialV2, SectionV2 = adapter.import_structure_protocol(
+    "StructureModelV2", "NodeV2", "ElementV2", "MaterialV2", "SectionV2"
+)
+
+# 导入技能运行时
+seismic_load_runtime = adapter.import_skill_runtime("seismic-load")
+SeismicLoadGenerator = seismic_load_runtime.SeismicLoadGenerator
+
+# 导入核心模块
+load_action_module = adapter.import_core_module("load_action")
+create_load_action = load_action_module.create_load_action
 
 
 def create_test_model() -> StructureModelV2:

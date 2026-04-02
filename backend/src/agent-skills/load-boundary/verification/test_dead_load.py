@@ -3,15 +3,23 @@
 Test cases for dead-load sub-skill
 """
 
-from structure_protocol.structure_model_v2 import (
-    StructureModelV2,
-    NodeV2,
-    ElementV2,
-    MaterialV2,
-    SectionV2,
-    LoadCaseV2
+import sys
+from pathlib import Path
+
+from test_import_adapter import TestImportAdapter
+
+# 初始化导入适配器
+load_boundary_path = Path(__file__).parent.parent
+adapter = TestImportAdapter(load_boundary_path)
+
+# 导入结构协议类
+StructureModelV2, NodeV2, ElementV2, MaterialV2, SectionV2, LoadCaseV2 = adapter.import_structure_protocol(
+    "StructureModelV2", "NodeV2", "ElementV2", "MaterialV2", "SectionV2", "LoadCaseV2"
 )
-from dead_load.runtime import generate_dead_loads
+
+# 导入技能运行时
+dead_load_runtime = adapter.import_skill_runtime("dead-load")
+generate_dead_loads = dead_load_runtime.generate_dead_loads
 
 
 def test_self_weight_calculation():

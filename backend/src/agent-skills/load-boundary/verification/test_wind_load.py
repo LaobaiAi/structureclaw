@@ -7,11 +7,20 @@ Wind Load Generator Tests
 import sys
 from pathlib import Path
 
-# 添加父目录到路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from test_import_adapter import TestImportAdapter
 
-from structure_protocol.structure_model_v2 import StructureModelV2, NodeV2, ElementV2, MaterialV2, SectionV2, StoryDef
-from wind_load.runtime import WindLoadGenerator
+# 初始化导入适配器
+load_boundary_path = Path(__file__).parent.parent
+adapter = TestImportAdapter(load_boundary_path)
+
+# 导入结构协议类
+StructureModelV2, NodeV2, ElementV2, MaterialV2, SectionV2, LoadCaseV2 = adapter.import_structure_protocol(
+    "StructureModelV2", "NodeV2", "ElementV2", "MaterialV2", "SectionV2", "LoadCaseV2"
+)
+
+# 导入技能运行时
+wind_load_runtime = adapter.import_skill_runtime("wind-load")
+WindLoadGenerator = wind_load_runtime.WindLoadGenerator
 
 
 def create_test_model():

@@ -83,7 +83,7 @@ class CodeChecker:
         校验荷载值
 
         Args:
-            load_actions: 荷载动作列表
+            load_actions: 荷载动作列表（对齐 V2 Schema）
             case_type: 工况类型
 
         Returns:
@@ -96,9 +96,9 @@ class CodeChecker:
         }
 
         for action in load_actions:
-            # 校验荷载值
-            if "load_value" in action:
-                load_value = action["load_value"]
+            # 校验荷载值 - 使用 V2 Schema 驼峰命名 (loadValue)
+            if "loadValue" in action:
+                load_value = action["loadValue"]
                 if load_value <= 0:
                     result["valid"] = False
                     result["errors"].append(f"荷载值必须大于0，当前值：{load_value}")
@@ -161,7 +161,11 @@ class CodeChecker:
         校验边界条件
 
         Args:
-            constraints: 节点约束列表
+            constraints: 节点约束列表（对齐 V2 Schema）
+                         支持 NodalConstraint.to_dict() 输出格式：
+                         - nodeId (顶层字段)
+                         - constraintType (在 extra 中)
+                         - restraints (顶层字段，V2 Schema)
 
         Returns:
             校验结果字典
@@ -172,17 +176,31 @@ class CodeChecker:
             "warnings": []
         }
 
-        constraint_types = [c.get("constraint_type") for c in constraints]
-
-        # 校验每个节点至少有一个约束
+        # 校验每个节点至少有一个约束 - 使用 V2 Schema 驼峰命名
         node_constraints = {}
         for constraint in constraints:
-            node_id = constraint.get("node_id")
-            if node_id:
-                if node_id not in node_constraints:
-                    node_constraints[node_id] = []
-                node_constraints[node_id].append(constraint.get("constraint_type"))
+            # 获取节点ID - 支持驼峰命名
+            node_id = constraint.get("nodeId") or constraint.get("node_id")
+            if not node_id:
+                continue
 
+            if node_id not in node_constraints:
+                node_constraints[node_id] = []
+
+            # 获取约束类型 - 可能直接在顶层或在 extra 中
+            constraint_type = (
+                constraint.get("constraintType") or
+                (constraint.get("extra", {}).get("constraintType") if constraint.get("extra") else None)
+            )
+
+            # 如果有约束类型，记录；否则检查是否有 restraints
+            if constraint_type:
+                node_constraints[node_id].append(constraint_type)
+            elif constraint.get("restraints"):
+                # V2 Schema 使用 restraints 数组，有约束即表示有边界条件
+                node_constraints[node_id].append("restraints")
+
+        # 检查未定义约束的节点
         for node_id, types in node_constraints.items():
             if len(types) == 0:
                 result["warnings"].append(f"节点 '{node_id}' 未定义任何边界条件，可能是自由节点")

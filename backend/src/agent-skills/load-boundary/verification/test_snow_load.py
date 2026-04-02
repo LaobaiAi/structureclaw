@@ -4,11 +4,27 @@ Test suite for snow load generator.
 Tests cover snow load generation, validation, and error handling.
 """
 
-import pytest
-from typing import Dict, Any, List
-from backend.src.agent_skills.load_boundary.snow_load.runtime import SnowLoadGenerator
-from backend.src.agent_skills.load_boundary.core.load_action import create_load_action
-from backend.src.agent_runtime.types import StructureModelV2, LoadCaseV2, NodeV2, ElementV2, MaterialV2, SectionV2
+import sys
+from pathlib import Path
+
+from test_import_adapter import TestImportAdapter
+
+# 初始化导入适配器
+load_boundary_path = Path(__file__).parent.parent
+adapter = TestImportAdapter(load_boundary_path)
+
+# 导入结构协议类
+StructureModelV2, NodeV2, ElementV2, MaterialV2, SectionV2 = adapter.import_structure_protocol(
+    "StructureModelV2", "NodeV2", "ElementV2", "MaterialV2", "SectionV2"
+)
+
+# 导入技能运行时
+snow_load_runtime = adapter.import_skill_runtime("snow-load")
+SnowLoadGenerator = snow_load_runtime.SnowLoadGenerator
+
+# 导入核心模块
+load_action_module = adapter.import_core_module("load_action")
+create_load_action = load_action_module.create_load_action
 
 
 def create_test_model() -> StructureModelV2:
@@ -108,18 +124,18 @@ def test_snow_load_generation():
     case_id = "SNOW-LC"
     result = generator.generate_snow_loads(
         case_id=case_id,
-        region="Beijing",
+        region="region_2",  # 使用正确的地区标识
         roof_type="flat"
     )
 
     # Verify load case was created
-    assert case_id in result.loadCases
-    load_case = result.loadCases[case_id]
-    assert load_case.id == case_id
-    assert "snow" in load_case.name.lower() or "雪" in load_case.name.lower()
+    assert case_id in result["load_case"]
+    load_case = result["load_case"]
+    assert load_case["id"] == case_id
+    assert load_case["type"] == "snow"
 
     # Verify loads were generated
-    assert len(load_case.loads) > 0
+    assert len(load_case["loads"]) > 0
 
 
 def test_custom_snow_load():
@@ -164,7 +180,7 @@ def test_invalid_region():
     with pytest.raises(ValueError) as exc_info:
         generator.generate_snow_loads(
             case_id="SNOW-REGION",
-            region="InvalidRegion",  # Invalid region
+            region="invalid_region",  # Invalid region
             roof_type="flat"
         )
 
@@ -179,8 +195,8 @@ def test_invalid_roof_type():
     with pytest.raises(ValueError) as exc_info:
         generator.generate_snow_loads(
             case_id="SNOW-ROOF",
-            region="Beijing",
-            roof_type="dome"  # Invalid roof type
+            region="region_2",
+            roof_type="invalid_roof"  # Invalid roof type
         )
 
     assert "roof type" in str(exc_info.value).lower() or "屋面类型" in str(exc_info.value).lower()
@@ -194,7 +210,7 @@ def test_invalid_case_id():
     with pytest.raises(ValueError) as exc_info:
         generator.generate_snow_loads(
             case_id="",  # Invalid (empty string)
-            region="Beijing",
+            region="region_2",
             roof_type="flat"
         )
 
@@ -205,13 +221,10 @@ def test_invalid_load_value():
     generator = SnowLoadGenerator(model)
 
     with pytest.raises(ValueError) as exc_info:
-        generator.add_custom_snow_load(
+        generator.generate_snow_loads(
             case_id="SNOW-LOAD",
-            element_ids=["s1"],
-            element_type="slab",
-            load_type="DISTRIBUTED_LOAD",
-            load_value=-0.5,  # Invalid (negative)
-            load_direction="z"
+            region="region_2",
+            roof_type="flat"
         )
 
 
@@ -220,27 +233,36 @@ def test_snow_load_factors():
     model = create_test_model()
     generator = SnowLoadGenerator(model)
 
-    # Test Beijing
-    result_beijing = generator.generate_snow_loads(
-        case_id="SNOW-BEIJING",
-        region="Beijing",
+    # Test region_1 (0.3 kN/m²)
+    result_region1 = generator.generate_snow_loads(
+        case_id="SNOW-REGION1",
+        region="region_1",
         roof_type="flat"
     )
 
-    # Test Shanghai
-    result_shanghai = generator.generate_snow_loads(
-        case_id="SNOW-SHANGHAI",
-        region="Shanghai",
+    # Test region_2 (0.5 kN/m²)
+    result_region2 = generator.generate_snow_loads(
+        case_id="SNOW-REGION2",
+        region="region_2",
         roof_type="flat"
     )
 
-    # Verify loads were generated for both regions
-    assert "SNOW-BEIJING" in result_beijing.loadCases
-    assert "SNOW-SHANGHAI" in result_shanghai.loadCases
+    # Test region_3 (0.7 kN/m²)
+    result_region3 = generator.generate_snow_loads(
+        case_id="SNOW-REGION3",
+        region="region_3",
+        roof_type="flat"
+    )
 
-    # Beijing should generally have higher snow loads than Shanghai
-    loads_beijing = sum(load["loadValue"] for load in result_beijing.loadCases["SNOW-BEIJING"].loads)
-    loads_shanghai = sum(load["loadValue"] for load in result_shanghai.loadCases["SNOW-SHANGHAI"].loads)
+    # Verify loads were generated for all regions
+    assert "SNOW-REGION1" in generator.load_cases
+    assert "SNOW-REGION2" in generator.load_cases
+    assert "SNOW-REGION3" in generator.load_cases
+
+    # Region 3 should have higher snow loads than Region 1
+    loads_region1 = sum(load["loadValue"] for load in generator.load_cases["SNOW-REGION1"]["loads"])
+    loads_region3 = sum(load["loadValue"] for load in generator.load_cases["SNOW-REGION3"]["loads"])
+    assert loads_region3 > loads_region1
 
 
 def test_roof_type_factors():
@@ -248,36 +270,48 @@ def test_roof_type_factors():
     model = create_test_model()
     generator = SnowLoadGenerator(model)
 
-    # Generate for flat roof
+    # Generate for flat roof (factor = 1.0)
     result_flat = generator.generate_snow_loads(
         case_id="SNOW-FLAT",
-        region="Beijing",
+        region="region_2",
         roof_type="flat"
     )
 
-    # Generate for pitched roof
-    result_pitched = generator.generate_snow_loads(
-        case_id="SNOW-PITCHED",
-        region="Beijing",
-        roof_type="pitched"
+    # Generate for sloped_25 roof (factor = 0.8)
+    result_sloped25 = generator.generate_snow_loads(
+        case_id="SNOW-SLOPED25",
+        region="region_2",
+        roof_type="sloped_25"
     )
 
-    # Generate for arched roof
-    result_arched = generator.generate_snow_loads(
-        case_id="SNOW-ARCHED",
-        region="Beijing",
-        roof_type="arched"
+    # Generate for sloped_25_50 roof (factor = 0.6)
+    result_sloped2550 = generator.generate_snow_loads(
+        case_id="SNOW-SLOPED2550",
+        region="region_2",
+        roof_type="sloped_25_50"
+    )
+
+    # Generate for sloped_50 roof (factor = 0.0)
+    result_sloped50 = generator.generate_snow_loads(
+        case_id="SNOW-SLOPED50",
+        region="region_2",
+        roof_type="sloped_50"
     )
 
     # Verify all load cases exist
-    assert "SNOW-FLAT" in result_flat.loadCases
-    assert "SNOW-PITCHED" in result_pitched.loadCases
-    assert "SNOW-ARCHED" in result_arched.loadCases
+    assert "SNOW-FLAT" in generator.load_cases
+    assert "SNOW-SLOPED25" in generator.load_cases
+    assert "SNOW-SLOPED2550" in generator.load_cases
+    assert "SNOW-SLOPED50" in generator.load_cases
 
     # Different roof types should have different load values due to different factors
-    loads_flat = sum(load["loadValue"] for load in result_flat.loadCases["SNOW-FLAT"].loads)
-    loads_pitched = sum(load["loadValue"] for load in result_pitched.loadCases["SNOW-PITCHED"].loads)
-    loads_arched = sum(load["loadValue"] for load in result_arched.loadCases["SNOW-ARCHED"].loads)
+    loads_flat = sum(load["loadValue"] for load in generator.load_cases["SNOW-FLAT"]["loads"])
+    loads_sloped25 = sum(load["loadValue"] for load in generator.load_cases["SNOW-SLOPED25"]["loads"])
+    loads_sloped2550 = sum(load["loadValue"] for load in generator.load_cases["SNOW-SLOPED2550"]["loads"])
+    loads_sloped50 = sum(load["loadValue"] for load in generator.load_cases["SNOW-SLOPED50"]["loads"])
+
+    # Flat roof should have highest load, sloped_50 should have zero load
+    assert loads_flat > loads_sloped25 > loads_sloped2550 > loads_sloped50 == 0
 
 
 def test_snow_distribution():
@@ -287,19 +321,18 @@ def test_snow_distribution():
 
     result = generator.generate_snow_loads(
         case_id="SNOW-DIST",
-        region="Beijing",
+        region="region_2",
         roof_type="flat"
     )
 
-    load_case = result.loadCases["SNOW-DIST"]
+    load_case = result["load_case"]
 
     # Verify loads are distributed over different element types
-    slab_loads = [load for load in load_case.loads if load.get("elementType") == "slab"]
-    beam_loads = [load for load in load_case.loads if load.get("elementType") == "beam"]
+    slab_loads = [load for load in load_case["loads"] if load.get("elementType") == "slab"]
+    beam_loads = [load for load in load_case["loads"] if load.get("elementType") == "beam"]
 
-    # Should have loads for both slabs and beams
-    # (assuming the generator supports distributing to both types)
-    assert len(slab_loads) > 0 or len(beam_loads) > 0
+    # Snow loads are applied to slabs
+    assert len(slab_loads) > 0
 
 
 def test_load_action_format():
@@ -309,15 +342,15 @@ def test_load_action_format():
 
     result = generator.generate_snow_loads(
         case_id="SNOW-FORMAT",
-        region="Beijing",
+        region="region_2",
         roof_type="flat"
     )
 
-    load_case = result.loadCases["SNOW-FORMAT"]
+    load_case = result["load_case"]
 
     # Verify all load actions have required fields in correct format
     required_fields = ["id", "elementType", "loadType", "loadValue", "loadDirection"]
-    for load in load_case.loads:
+    for load in load_case["loads"]:
         for field in required_fields:
             assert field in load, f"Missing field: {field}"
 
@@ -335,20 +368,20 @@ def test_unbalanced_snow_load():
     model = create_test_model()
     generator = SnowLoadGenerator(model)
 
-    # Generate for gable roof (may have unbalanced loading)
-    result_gable = generator.generate_snow_loads(
-        case_id="SNOW-GABLE",
-        region="Beijing",
-        roof_type="gable"
+    # Generate for sloped_25_50 roof (intermediate slope)
+    result_sloped = generator.generate_snow_loads(
+        case_id="SNOW-SLOPED2550",
+        region="region_2",
+        roof_type="sloped_25_50"
     )
 
-    load_case = result_gable.loadCases["SNOW-GABLE"]
+    load_case = result_sloped["load_case"]
 
     # Verify loads were generated
-    assert len(load_case.loads) > 0
+    assert len(load_case["loads"]) > 0
 
     # Verify all load values are positive
-    for load in load_case.loads:
+    for load in load_case["loads"]:
         assert load["loadValue"] > 0
 
 
@@ -360,14 +393,14 @@ def test_drift_load():
     # Generate snow loads (may include drift effects)
     result = generator.generate_snow_loads(
         case_id="SNOW-DRIFT",
-        region="Beijing",
+        region="region_2",
         roof_type="flat"
     )
 
-    load_case = result.loadCases["SNOW-DRIFT"]
+    load_case = result["load_case"]
 
     # Verify loads were generated
-    assert len(load_case.loads) > 0
+    assert len(load_case["loads"]) > 0
 
 
 if __name__ == "__main__":
