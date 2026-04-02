@@ -31,6 +31,10 @@ class WindLoadGenerator(LoadGeneratorBase):
         'D': {'alpha': 0.30, 'gradient_height': 550},
     }
 
+    # 风压高度变化系数基准值 (GB 50009, 10m处)
+    # μ_z = 0.616 × (z/10)^α, where α is terrain roughness exponent
+    HEIGHT_FACTOR_BASE = 0.616
+
     def __init__(self, model: StructureModelV2):
         super().__init__(model)
         self._section_cache: Dict[str, Optional[SectionV2]] = {}
@@ -168,7 +172,8 @@ class WindLoadGenerator(LoadGeneratorBase):
         if story_height < 10:
             story_height = 10
 
-        mu_z = 0.616 * (story_height / 10) ** alpha
+        # 风压高度变化系数: μ_z = HEIGHT_FACTOR_BASE × (z/10)^α
+        mu_z = self.HEIGHT_FACTOR_BASE * (story_height / 10) ** alpha
         return min(mu_z, 2.0)
 
     def _get_section(self, section_id: str) -> Optional[SectionV2]:
