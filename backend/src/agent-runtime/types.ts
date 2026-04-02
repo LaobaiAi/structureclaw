@@ -147,9 +147,10 @@ export type RestraintDOF = [boolean, boolean, boolean, boolean, boolean, boolean
 // ============================================================================
 
 // ============================================================================
-// 【理论完整型】保留用于不时之需的完整6x6刚度矩阵接口
-// 用途：复杂耦合场景、特殊结构、学术研究、需要精确控制所有刚度项
-// 注意：这是完整的理论表示，包含36个刚度假（对应6自由度）
+// 【理论完整型】完整6x6刚度矩阵接口（显式字段定义）
+// 用途：复杂耦合场景、需要类型提示的开发、精确控制所有刚度项
+// 建议：对于大多数场景，使用 Matrix6x6 (数组形式) 更简洁高效
+// 转换：StiffnessMatrixUtils 可在接口和数组形式之间转换
 // ============================================================================
 export interface Matrix6x6 {
   // 行1: X方向力对各自由度的刚度
@@ -201,7 +202,8 @@ export interface Matrix6x6 {
   Mz_rz: number;  // Z力矩对绕Z转动
 }
 
-// 完整6x6矩阵的数组表示形式（另一种理论完整表示）
+// 完整6x6矩阵的数组表示（优先使用，更简洁）
+// 推荐：使用数组形式进行矩阵运算和传递，性能更好且更易维护
 export type Matrix6x6Array = number[][];
 
 // ============================================================================
@@ -288,6 +290,22 @@ export class StiffnessMatrixUtils {
       [matrix.My_ux, matrix.My_uy, matrix.My_uz, matrix.My_rx, matrix.My_ry, matrix.My_rz],
       [matrix.Mz_ux, matrix.Mz_uy, matrix.Mz_uz, matrix.Mz_rx, matrix.Mz_ry, matrix.Mz_rz]
     ];
+  }
+
+  /**
+   * 数组形式转接口形式（理论完整型之间的转换）
+   * @param array 数组形式的6x6矩阵
+   * @returns 接口形式的6x6矩阵
+   */
+  static arrayToInterface(array: Matrix6x6Array): Matrix6x6 {
+    return {
+      Fx_ux: array[0][0], Fx_uy: array[0][1], Fx_uz: array[0][2], Fx_rx: array[0][3], Fx_ry: array[0][4], Fx_rz: array[0][5],
+      Fy_ux: array[1][0], Fy_uy: array[1][1], Fy_uz: array[1][2], Fy_rx: array[1][3], Fy_ry: array[1][4], Fy_rz: array[1][5],
+      Fz_ux: array[2][0], Fz_uy: array[2][1], Fz_uz: array[2][2], Fz_rx: array[2][3], Fz_ry: array[2][4], Fz_rz: array[2][5],
+      Mx_ux: array[3][0], Mx_uy: array[3][1], Mx_uz: array[3][2], Mx_rx: array[3][3], Mx_ry: array[3][4], Mx_rz: array[3][5],
+      My_ux: array[4][0], My_uy: array[4][1], My_uz: array[4][2], My_rx: array[4][3], My_ry: array[4][4], My_rz: array[4][5],
+      Mz_ux: array[5][0], Mz_uy: array[5][1], Mz_uz: array[5][2], Mz_rx: array[5][3], Mz_ry: array[5][4], Mz_rz: array[5][5]
+    };
   }
 
   /**
