@@ -62,6 +62,11 @@ class SnowLoadGenerator:
         
         logger.info(f"Snow loads: {case_id}, region={region}, roof={roof_type}")
 
+        # 计算设计雪载
+        base_snow_load = self.SNOW_LOAD_BASE_VALUES.get(region, 0.0)
+        roof_factor = self.ROOF_TYPE_FACTORS.get(roof_type, 1.0)
+        design_snow_load = base_snow_load * roof_factor
+
         load_case = {
             "id": case_id,
             "type": "snow",
