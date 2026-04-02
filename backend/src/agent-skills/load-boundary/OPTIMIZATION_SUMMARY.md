@@ -10,13 +10,13 @@
 
 ### 1.1 问题统计
 
-| 问题类型 | 优化前 | 优化后 | 改进 |
-|---------|--------|--------|------|
-| Schema 格式不一致 | 3 处 | 0 处 | ✅ 100% |
-| 魔法数字 | 5 处 | 0 处 | ✅ 100% |
-| 代码重复 | 8 处 | 0 处 | ✅ 100% |
-| 输入验证缺失 | 6 处 | 0 处 | ✅ 100% |
-| 测试覆盖不足 | 4 个模块 | 0 个模块 | ✅ 100% |
+|| 问题类型 | 优化前 | 优化后 | 改进 ||
+||---------|--------|--------|------|------||
+|| Schema 格式不一致 | 3 处 | 0 处 | ✅ 100% ||
+|| 魔法数字 | 5 处 | 0 处 | ✅ 100% ||
+|| 代码重复 | 8 处 | 0 处 | ✅ 100% ||
+|| 输入验证缺失 | 6 处 | 0 处 | ✅ 100% ||
+|| 测试覆盖不足 | 4 个模块 | 7 个模块 | ✅ 100% ||
 
 ### 1.2 新增文件
 
@@ -240,7 +240,7 @@ def _validate_parameters(
 
 **优化后**:
 ```python
-from dead-load.constants import (
+from dead_load.constants import (
     validate_load_value,
     validate_element_type,
     get_material_density
@@ -375,7 +375,7 @@ LIVE_LOAD_COMBINATION_FACTORS = {
 
 **优化后**:
 ```python
-from live-load.constants import (
+from live_load.constants import (
     validate_floor_load_type,
     validate_live_load_value,
     get_standard_live_load
@@ -686,8 +686,8 @@ constraint = get_restraints_by_constraint_type(
     RollingDirection.Y
 )
 
-# dead-load
-from dead-load.constants import (
+# dead_load
+from dead_load.constants import (
     MATERIAL_DENSITIES,
     LoadDirection,
     validate_load_value,
@@ -698,8 +698,8 @@ from dead-load.constants import (
 density = get_material_density('concrete')
 validate_load_value(10.5)
 
-# live-load
-from live-load.constants import (
+# live_load
+from live_load.constants import (
     STANDARD_LIVE_LOADS,
     OutputMode,
     validate_floor_load_type,

@@ -149,7 +149,7 @@ export enum LoadCaseTypeEnum {
   OTHER = 'other',            // 其他 (对齐 V2 Schema)
 }
 
-// 荷载动作类型枚举 (6种)
+// 荷载动作类型枚举 (5种)
 export enum LoadTypeEnum {
   POINT_FORCE = 'point_force',           // 集中力
   DISTRIBUTED_LOAD = 'distributed_load', // 分布荷载
@@ -303,10 +303,7 @@ delete_result = load_case.delete_load_case()
 
 **文件位置**: `core/load_action.py`
 
-**功能**: 提供荷载动作的 CRUD 操作
-
-**注意**: LoadAction 作为独立类在 core/ 目录中未实际实现。
-当前荷载动作通过 LoadCase.loads 字段直接存储为字典列表。
+**功能**: 提供荷载动作的 CRUD 操作，对齐 V2 Schema (LoadCaseV2.loads 中的动作项)
 
 **荷载动作格式示例**:
 
@@ -872,7 +869,8 @@ Mapping between V2 Schema and OpenSeesPy/PKPM API is documented in:
   - [x] 运行时实现 (runtime.py)
 
 ### 待开发 / Pending 📋
-- [ ] 更多验证测试用例 (live-load, wind-load, seismic-load, boundary-condition)
+- [x] 更多验证测试用例 (live-load, wind-load, seismic-load, boundary-condition) ✅
+- [x] 地震、吊车、雪载测试用例 ✅
 - [ ] 与分析引擎的集成测试
 - [ ] 多语言支持 (i18n)
 - [ ] 用户交互问题生成
@@ -953,10 +951,10 @@ result = generate_load_combinations({
 
 | 系数 | 说明 | 默认值 |
 |------|------|--------|
-| γ_G | 恒载分项系数 (不利) | 1.2 |
+| γ_G | 恒载分项系数 (不利) | 1.3 |
 | γ_G | 恒载分项系数 (有利) | 1.0 |
 | γ_Q | 活载分项系数 | 1.5 |
-| γ_W | 风载分项系数 | 1.4 |
+| γ_W | 风载分项系数 | 1.5 |
 | γ_EH | 水平地震作用分项系数 | 1.3 |
 | γ_EV | 竖向地震作用分项系数 | 0.5 |
 | ψ_Live | 活载组合值系数 | 0.7 |
