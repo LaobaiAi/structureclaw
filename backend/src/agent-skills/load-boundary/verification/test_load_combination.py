@@ -25,7 +25,6 @@ expand_load_cases = load_combination_runtime.expand_load_cases
 process_custom_combinations = load_combination_runtime.process_custom_combinations
 generate_special_member_combinations = load_combination_runtime.generate_special_member_combinations
 create_custom_combination = load_combination_runtime.create_custom_combination
-)
 
 
 def test_basic_uls_combinations():
