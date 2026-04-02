@@ -5,6 +5,13 @@ from datetime import datetime
 
 from structure_protocol.structure_model_v2 import StructureModelV2, SectionV2
 import logging
+from ..shared.constants import (
+    LoadType,
+    ElementType,
+    validate_load_value,
+    validate_element_type,
+    validate_numeric_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +147,26 @@ class WindLoadGenerator:
 
         Returns:
             荷载动作
+
+        Raises:
+            ValueError: 当输入参数无效时
+            TypeError: 当参数类型错误时
         """
+        # 参数验证
+        if not element_id or not isinstance(element_id, str):
+            raise TypeError(f"单元ID必须是非空字符串，得到: {type(element_id)}")
+        
+        validate_element_type(element_type)
+        validate_load_value(load_value, LoadType.DISTRIBUTED_LOAD)
+        
+        # 验证风向
+        valid_directions = ['x', '-x', 'y', '-y']
+        if wind_direction not in valid_directions:
+            raise ValueError(
+                f"无效的风向: {wind_direction}. "
+                f"有效值为: {valid_directions}"
+            )
+        
         # 确定荷载方向向量
         if wind_direction == 'x':
             load_direction = {"x": 1.0, "y": 0.0, "z": 0.0}
@@ -148,13 +174,11 @@ class WindLoadGenerator:
             load_direction = {"x": -1.0, "y": 0.0, "z": 0.0}
         elif wind_direction == 'y':
             load_direction = {"x": 0.0, "y": 1.0, "z": 0.0}
-        elif wind_direction == '-y':
+        else:  # '-y'
             load_direction = {"x": 0.0, "y": -1.0, "z": 0.0}
-        else:
-            load_direction = {"x": 0.0, "y": 0.0, "z": 0.0}
 
         load_action = {
-            "actionId": f"LA_{element_id}_W",
+            "id": f"LA_{element_id}_W",
             "caseId": case_id,
             "elementType": element_type,
             "elementId": element_id,
@@ -437,7 +461,7 @@ class WindLoadGenerator:
             warning_notes = f" [注意: {self._warnings_by_element[element.id]}]"
         
         load_action = {
-            "actionId": f"LA_{element.id}_W",
+            "id": f"LA_{element.id}_W",
             "caseId": case_id,
             "elementType": element.type,
             "elementId": element.id,

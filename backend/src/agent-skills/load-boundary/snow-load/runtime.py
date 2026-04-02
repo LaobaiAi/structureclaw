@@ -4,6 +4,13 @@ from typing import Any, Dict, List
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
+from ..shared.constants import (
+    LoadType,
+    ElementType,
+    validate_element_type,
+    validate_numeric_value,
+    validate_string_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +64,29 @@ class SnowLoadGenerator:
 
         Returns:
             荷载工况和荷载动作
+
+        Raises:
+            ValueError: 当输入参数无效时
         """
+        # 参数验证
+        validate_string_id(case_id, "工况ID")
+        
+        # 验证地区类型
+        valid_regions = list(self.SNOW_LOAD_BASE_VALUES.keys())
+        if region not in valid_regions:
+            raise ValueError(
+                f"无效的地区类型: {region}. "
+                f"有效值为: {valid_regions}"
+            )
+        
+        # 验证屋面类型
+        valid_roof_types = list(self.ROOF_TYPE_FACTORS.keys())
+        if roof_type not in valid_roof_types:
+            raise ValueError(
+                f"无效的屋面类型: {roof_type}. "
+                f"有效值为: {valid_roof_types}"
+            )
+        
         logger.info(f"Generating snow loads for case: {case_id}, region={region}, roof_type={roof_type}")
 
         # 获取雪荷载基本值和修正系数
@@ -89,8 +118,11 @@ class SnowLoadGenerator:
                         load_case["loads"].append(load_action)
                         self.load_actions.append(load_action)
 
-            except Exception as error:
-                logger.error(f"Failed to calculate snow load for element '{elem.id}': {error}")
+            except (ValueError, ArithmeticError) as error:
+                logger.error(f"计算构件 '{elem.id}' 的雪荷载时发生数值错误: {error}")
+                continue
+            except RuntimeError as error:
+                logger.error(f"计算构件 '{elem.id}' 的雪荷载时发生运行时错误: {error}")
                 continue
 
         self.load_cases[case_id] = load_case
@@ -123,12 +155,12 @@ class SnowLoadGenerator:
         # 对于板单元（slab），面荷载 kN/m² 是合适的单位
         return {
             "id": f"SNOW_{element.id}",
-            "case_id": "LC_SNOW",
-            "element_type": element.type,
-            "element_id": element.id,
-            "load_type": "distributed_load",  # 面荷载（对板单元）
-            "load_value": snow_load,  # kN/m² - 面荷载单位
-            "load_direction": {"x": 0.0, "y": 0.0, "z": -1.0},  # 向下
+            "caseId": "LC_SNOW",
+            "elementType": element.type,
+            "elementId": element.id,
+            "loadType": "distributed_load",  # 面荷载（对板单元）
+            "loadValue": snow_load,  # kN/m² - 面荷载单位
+            "loadDirection": {"x": 0.0, "y": 0.0, "z": -1.0},  # 向下
             "extra": {
                 "snow_load": snow_load,
                 "distribution_type": "uniform",

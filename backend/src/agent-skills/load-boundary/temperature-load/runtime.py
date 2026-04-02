@@ -89,8 +89,11 @@ class TemperatureLoadGenerator:
                     load_case["loads"].append(load_action)
                     self.load_actions.append(load_action)
 
-            except Exception as error:
-                logger.error(f"Failed to calculate temperature load for element '{elem.id}': {error}")
+            except (ValueError, ArithmeticError) as error:
+                logger.error(f"计算构件 '{elem.id}' 的温度荷载时发生数值错误: {error}")
+                continue
+            except RuntimeError as error:
+                logger.error(f"计算构件 '{elem.id}' 的温度荷载时发生运行时错误: {error}")
                 continue
 
         self.load_cases[case_id] = load_case

@@ -91,8 +91,11 @@ class DeadLoadGenerator:
                     load_case["loads"].append(load_action)
                     self.load_actions.append(load_action)
 
-            except Exception as error:
-                logger.error(f"Failed to calculate self-weight for element '{elem.id}': {error}")
+            except (ValueError, ArithmeticError) as error:
+                logger.error(f"计算构件 '{elem.id}' 的自重时发生数值错误: {error}")
+                continue
+            except RuntimeError as error:
+                logger.error(f"计算构件 '{elem.id}' 的自重时发生运行时错误: {error}")
                 continue
 
         self.load_cases[case_id] = load_case
@@ -149,7 +152,7 @@ class DeadLoadGenerator:
             load_direction = LoadDirection.GRAVITY
 
         load_action = {
-            "actionId": f"LA_{element_id}_DE",
+            "id": f"LA_{element_id}_DE",
             "caseId": case_id,
             "elementType": element_type,
             "elementId": element_id,
@@ -213,7 +216,7 @@ class DeadLoadGenerator:
             load_direction = LoadDirection.GRAVITY
 
         load_action = {
-            "actionId": f"LA_{element_id}_DE_POINT",
+            "id": f"LA_{element_id}_DE_POINT",
             "caseId": case_id,
             "elementType": element_type,
             "elementId": element_id,
@@ -255,7 +258,7 @@ class DeadLoadGenerator:
             荷载动作字典
         """
         # 获取材料密度
-        density = self.MATERIAL_DENSITIES.get(material.category, 2500)
+        density = MATERIAL_DENSITIES.get(material.category, 2500)
         if hasattr(material, 'rho') and material.rho:
             density = material.rho
 
@@ -272,7 +275,7 @@ class DeadLoadGenerator:
 
         # 创建荷载动作
         load_action = {
-            "actionId": f"LA_{element.id}_SW",
+            "id": f"LA_{element.id}_SW",
             "caseId": "LC_DE",
             "elementType": element.type,
             "elementId": element.id,

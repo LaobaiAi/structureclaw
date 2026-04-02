@@ -61,6 +61,9 @@ class LiveLoadGenerator:
 
         # 优化：预加载常用数据
         self._story_map = self._build_story_map()
+        
+        # 缓存配置
+        self._section_cache: Dict[str, Optional[Any]] = {}
 
     def generate_floor_live_loads(
         self,
@@ -121,7 +124,7 @@ class LiveLoadGenerator:
 
                 # 如果模型中没有定义，使用标准活载值
                 if load_value is None:
-                    load_value = self.STANDARD_LIVE_LOADS.get(floor_load_type, 2.0)
+                    load_value = STANDARD_LIVE_LOADS.get(floor_load_type, 2.0)
                     logger.info(
                         f"Element '{elem.id}' (story '{story_id}'): "
                         f"Using standard live load {load_value:.2f} kN/m² for '{floor_load_type}'"
@@ -187,7 +190,7 @@ class LiveLoadGenerator:
             load_direction = LoadDirection.GRAVITY
 
         load_action = {
-            "actionId": f"LA_{element_id}_LL",
+            "id": f"LA_{element_id}_LL",
             "caseId": case_id,
             "elementType": element_type,
             "elementId": element_id,
@@ -272,14 +275,14 @@ class LiveLoadGenerator:
         element_type = element.type
 
         # 面荷载模式：直接输出面荷载，无需转换
-        if self.output_mode == self.OUTPUT_MODE_AREA:
+        if self.output_mode == OutputMode.AREA:
             load_action = {
-                "actionId": f"LA_{element.id}_LL",
+                "id": f"LA_{element.id}_LL",
                 "caseId": case_id,
                 "elementType": element_type,
                 "elementId": element.id,
                 "loadType": "distributed_load",
-                "loadValue": load_value,  # kN/m² - 面荷载
+                "loadValue": load_value,
                 "loadDirection": {"x": 0.0, "y": -1.0, "z": 0.0},
                 "description": f"{floor_type} 活载: {load_value:.3f} kN/m² (面荷载)",
                 "extra": {
@@ -315,7 +318,7 @@ class LiveLoadGenerator:
         )
 
         load_action = {
-            "actionId": f"LA_{element.id}_LL",
+            "id": f"LA_{element.id}_LL",
             "caseId": case_id,
             "elementType": element_type,
             "elementId": element.id,
@@ -642,7 +645,7 @@ def generate_live_loads(model: StructureModelV2, parameters: Dict[str, Any]) -> 
             "case_count": len(generator.get_load_cases()),
             "action_count": len(generator.get_load_actions()),
             "case_id": case_id,
-            "output_mode": output_mode  # 添加输出模式到摘要
+            "output_mode": output_mode,  # 添加输出模式到摘要
             "floor_type": floor_load_type
         }
     }

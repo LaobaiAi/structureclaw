@@ -210,7 +210,7 @@ class SeismicLoadGenerator:
             load_direction = {"x": 0.0, "y": 0.0, "z": 0.0}
 
         load_action = {
-            "actionId": f"LA_{element_id}_E",
+            "id": f"LA_{element_id}_E",
             "caseId": case_id,
             "elementType": element_type,
             "elementId": element_id,
@@ -444,7 +444,7 @@ class SeismicLoadGenerator:
         load_direction = force_data.get("direction", {"x": 0.0, "y": 0.0, "z": 0.0})
 
         load_action = {
-            "actionId": f"LA_{element.id}_E",
+            "id": f"LA_{element.id}_E",
             "caseId": case_id,
             "elementType": element.type,
             "elementId": element.id,
