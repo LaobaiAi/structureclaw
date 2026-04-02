@@ -83,12 +83,12 @@ def generate_load_combinations(params: Dict[str, Any]) -> Dict[str, Any]:
                 load_cases[base_type].append(exp_id)
         
         # 提取各类荷载工况ID
-        dead_load_ids = load_cases.get("dead_load_load", load_cases.get("dead_load", []))
-        live_load_ids = load_cases.get("live_load_load", load_cases.get("live_load", []))
-        wind_load_ids = load_cases.get("wind_load_load", load_cases.get("wind_load", []))
-        seismic_load_ids = load_cases.get("seismic_load_load", load_cases.get("seismic_load", []))
-        crane_load_ids = load_cases.get("crane_load_load", load_cases.get("crane_load", []))
-        temp_load_ids = load_cases.get("temperature_load_load", load_cases.get("temperature_load", []))
+        dead_load_ids = load_cases.get("dead_load", load_cases.get("dead", []))
+        live_load_ids = load_cases.get("live_load", load_cases.get("live", []))
+        wind_load_ids = load_cases.get("wind_load", load_cases.get("wind", []))
+        seismic_load_ids = load_cases.get("seismic_load", load_cases.get("seismic", []))
+        crane_load_ids = load_cases.get("crane_load", load_cases.get("crane", []))
+        temp_load_ids = load_cases.get("temperature_load", load_cases.get("temperature", []))
         
         # 根据类型生成组合
         all_combinations = []
@@ -139,11 +139,23 @@ def generate_load_combinations(params: Dict[str, Any]) -> Dict[str, Any]:
             "factors": generator.factors.to_dict() if generator.factors else None
         }
     
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         return {
             "status": "error",
-            "error": str(e),
-            "message": f"生成荷载组合时发生错误: {str(e)}"
+            "error": "参数类型错误或值无效",
+            "message": f"参数验证错误: {str(e)}"
+        }
+    except KeyError as e:
+        return {
+            "status": "error",
+            "error": "缺少必要的参数或键",
+            "message": f"必填参数缺失: {str(e)}"
+        }
+    except RuntimeError as e:
+        return {
+            "status": "error",  
+            "error": "运行时错误",
+            "message": f"生成过程中发生错误: {str(e)}"
         }
 
 
@@ -161,11 +173,17 @@ def expand_load_cases(load_cases: Dict[str, Any]) -> Dict[str, Any]:
         generator = LoadCombinationGenerator()
         return generator.expand_load_cases_for_combination(load_cases)
     
-    except Exception as e:
+    except ValueError as e:
         return {
             "status": "error",
-            "error": str(e),
-            "message": f"展开工况时发生错误: {str(e)}"
+            "error": "输入参数格式错误",
+            "message": f"工况数据格式错误: {str(e)}"
+        }
+    except RuntimeError as e:
+        return {
+            "status": "error",
+            "error": "展开工况失败",
+            "message": f"工况展开失败: {str(e)}"
         }
 
 
@@ -207,11 +225,17 @@ def process_custom_combinations(
             "error": f"无效的组合方式: {combination_method}",
             "message": str(e)
         }
-    except Exception as e:
+    except NotImplementedError as e:
         return {
             "status": "error",
-            "error": str(e),
-            "message": f"处理自定义组合时发生错误: {str(e)}"
+            "error": "不支持的操作",
+            "message": f"组合方式未实现: {str(e)}"
+        }
+    except RuntimeError as e:
+        return {
+            "status": "error",
+            "error": "处理自定义组合失败",
+            "message": f"自定义组合处理失败: {str(e)}"
         }
 
 
@@ -249,11 +273,17 @@ def generate_special_member_combinations(
             "count": result["count"]
         }
     
-    except Exception as e:
+    except ValueError as e:
         return {
             "status": "error",
-            "error": str(e),
-            "message": f"生成特殊构件组合时发生错误: {str(e)}"
+            "error": "构件类型或工况数据无效",
+            "message": f"特殊构件组合参数错误: {str(e)}"
+        }
+    except RuntimeError as e:
+        return {
+            "status": "error",
+            "error": "特殊构件组合生成失败", 
+            "message": f"特殊构件组合生成错误: {str(e)}"
         }
 
 

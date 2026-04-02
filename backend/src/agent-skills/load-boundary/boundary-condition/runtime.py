@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 
 from structure_protocol.structure_model_v2 import StructureModelV2
 import logging
@@ -449,7 +450,7 @@ class BoundaryConditionGenerator:
             "extra": {
                 "constraintType": constraint_type.value,
                 "description": get_constraint_description(constraint_type),
-                "timestamp": None  # 可选：添加时间戳
+                "timestamp": datetime.now().isoformat()  # 可选：添加时间戳
             }
         }
 
@@ -539,8 +540,8 @@ class BoundaryConditionGenerator:
         constraint = self.nodal_constraints.get(node_id)
 
         if constraint:
-            # 从约束中提取 constraintType
-            constraint_type = constraint.get("constraintType")
+            # 从约束中提取 constraintType (位于 extra 字段)
+            constraint_type = constraint.get("extra", {}).get("constraintType")
             if constraint_type:
                 try:
                     # 使用常量函数获取长度系数
