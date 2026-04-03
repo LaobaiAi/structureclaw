@@ -208,7 +208,7 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         # 返回 story_id -> force 映射，避免索引不匹配
         story_forces_dict = {}
         for data in story_data:
-            force = base_shear * data['weighted_height'] / total_weighted_height
+            force = (base_shear * data['weighted_height'] / total_weighted_height) if total_weighted_height > 0 else 0.0
             story_forces_dict[data['id']] = force
 
         logger.info(f"Story forces: total={base_shear:.2f}kN, {len(story_forces_dict)} stories")
