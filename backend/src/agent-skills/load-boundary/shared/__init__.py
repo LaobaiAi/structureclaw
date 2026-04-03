@@ -5,7 +5,7 @@ Load-Boundary 共享模块 / Load-Boundary Shared Module
 用于消除代码重复，提高代码复用性和可维护性。
 """
 
-from .model_data_helper_new import ModelDataHelper
+from .model_data_helper import ModelDataHelper
 from .model_fetcher import ModelDataFetcher, V2SchemaFetcher, FilteredDataFetcher
 from .model_cache import ModelDataCache, MaterialCache, SectionCache, NodeCache, StoryCache, SimpleDictCache
 from .geometry_helper import GeometryHelper

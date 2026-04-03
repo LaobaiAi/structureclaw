@@ -696,8 +696,7 @@ class LoadCombinationGenerator:
             # 叠加: 在原组合基础上添加自定义荷载
             for base_combo in base_combinations:
             for base_combo in base_combinations:
-                new_combo = base_combo.copy()
-                new_combo["id"] = self._get_next_combination_id()
+            for base_combo in base_combinations:
                 new_combo["description"] = f"{base_combo['description']} + 叠加自定义"
                 
                 # 必须拷贝 factors 字典，否则会修改原始组合对象
