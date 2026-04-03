@@ -386,12 +386,23 @@ class ForceDistributor:
         """
         # 获取构件两端节点
         try:
-            # 假设 element 有 nodes 属性或 node_i, node_j 属性
-            node_i = getattr(element, 'node_i', None)
-            node_j = getattr(element, 'node_j', None)
+            # V2 Schema: ElementV2 使用 nodes: List[str] 属性
+            if not hasattr(element, 'nodes') or len(element.nodes) < 2:
+                logger.warning(f"构件 {element.id} 缺少节点信息，使用默认值")
+                return 12.0
+
+            # 从模型中获取节点对象
+            node_i_id = element.nodes[0]
+            node_j_id = element.nodes[1]
+
+            # 通过模型的 nodes 字典获取节点对象
+            node_i = self.model.nodes.get(node_i_id)
+            node_j = self.model.nodes.get(node_j_id)
 
             if not node_i or not node_j:
-                # 无法获取节点信息，使用默认值（两端固定）
+                logger.warning(
+                    f"构件 {element.id} 的节点 {node_i_id} 或 {node_j_id} 不存在，使用默认值"
+                )
                 return 12.0
 
             # 检查两端节点的转动约束
@@ -556,26 +567,34 @@ class ForceDistributor:
         direction: str
     ) -> float:
         """
-        计算两点在指定方向的距离
+        计算两点在指定方向垂直方向的距离（力臂）
+
+        对于考虑扭转效应的地震力分配，力臂应垂直于力的方向：
+        - X方向力：使用Y方向距离作为力臂
+        - Y方向力：使用X方向距离作为力臂
+        - Z方向力：在平面内考虑X和Y方向的力臂
 
         Args:
             point1: 点1
             point2: 点2
-            direction: 方向
+            direction: 力的方向
 
         Returns:
-            距离
+            垂直距离（力臂）
         """
         dx = point1[0] - point2[0]
         dy = point1[1] - point2[1]
         dz = point1[2] - point2[2]
 
         if direction in ['x', '-x']:
-            return abs(dx)
-        elif direction in ['y', '-y']:
+            # X方向力：使用Y方向距离作为力臂
             return abs(dy)
+        elif direction in ['y', '-y']:
+            # Y方向力：使用X方向距离作为力臂
+            return abs(dx)
         else:
-            return abs(dz)
+            # Z方向力：在平面内考虑X和Y的合成力臂
+            return (dx**2 + dy**2)**0.5
 
     def _calculate_element_length(self, element: Any) -> float:
         """计算构件长度 (m)"""
