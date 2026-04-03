@@ -127,8 +127,9 @@ class BaseShearCalculator:
         alpha1 = alpha_max
 
         # 底部剪力: F_ek = α_max * G_eq (G_eq = 0.85 * G)
-        base_shear = alpha1 * (0.85 * total_weight)
-        base_shear = alpha1 * total_weight
+        # G_eq 为结构等效重力荷载代表值，GB 50011-2010 规定 G_eq = 0.85 * G
+        equivalent_weight = 0.85 * total_weight
+        base_shear = alpha1 * equivalent_weight
 
         # 阻尼调整系数 (GB 50011-2010 公式 5.1.5-3)
         if damping_ratio != 0.05:
