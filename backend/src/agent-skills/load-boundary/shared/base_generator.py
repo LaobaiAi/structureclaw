@@ -101,21 +101,43 @@ class LoadGeneratorBase(ABC):
             story_id: 楼层ID
 
         Returns:
-            楼层标高 (m)
+            楼层标高 (m)，确保总是返回可比较的float值
         """
-        for story in self.model.stories:
-            if story.id == story_id:
-                return story.elevation if story.elevation else 0.0
+        # 首先尝试从stories获取
+        if hasattr(self.model, 'stories') and self.model.stories:
+            for story in self.model.stories:
+                if story.id == story_id:
+                    # 显式检查elevation是否为None，避免与0.0混淆
+                    if story.elevation is not None:
+                        return float(story.elevation)
+                    # elevation为None时，继续尝试其他方法
 
-        # 从节点计算
+        # 从节点计算标高（作为备选方案）
         node_z_values = []
-        for node in self.model.nodes:
-            if node.story == story_id:
-                node_z_values.append(node.z)
+        if hasattr(self.model, 'nodes') and self.model.nodes:
+            for node in self.model.nodes:
+                if hasattr(node, 'story') and node.story == story_id:
+                    node_z_values.append(float(node.z))
 
         if node_z_values:
             return sum(node_z_values) / len(node_z_values)
 
+        # 如果都无法获取，返回一个基于story_id的默认值，确保可排序
+        # 对于格式如 "F1", "F2", "B1" 等，尝试解析数字
+        try:
+            if story_id.startswith(('F', 'f')):
+                # F1, F2, F3...  提取数字
+                num = int(story_id[1:])
+                return float(num * 3.6)  # 假设标准层高3.6m
+            elif story_id.startswith(('B', 'b')):
+                # B1, B2, B3...  地下层
+                num = int(story_id[1:])
+                return float(-num * 3.6)
+        except (ValueError, IndexError):
+            pass
+
+        # 最后的备选：返回0.0
+        logger.warning(f"无法确定楼层 {story_id} 的标高，使用默认值 0.0")
         return 0.0
 
     @staticmethod
