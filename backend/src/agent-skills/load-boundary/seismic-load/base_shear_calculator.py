@@ -126,7 +126,8 @@ class BaseShearCalculator:
         # 计算地震影响系数 (简化: 取最大值)
         alpha1 = alpha_max
 
-        # 底部剪力: F_ek = α_max * G_eq
+        # 底部剪力: F_ek = α_max * G_eq (G_eq = 0.85 * G)
+        base_shear = alpha1 * (0.85 * total_weight)
         base_shear = alpha1 * total_weight
 
         # 阻尼调整系数 (GB 50011-2010 公式 5.1.5-3)
