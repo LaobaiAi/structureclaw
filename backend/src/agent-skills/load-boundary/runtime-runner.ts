@@ -23,6 +23,7 @@ export class LoadBoundaryRuntimeRunner {
 
     // Prepare Python script execution
     // Use sys.stdin to safely read JSON parameters, avoiding shell injection risks
+    // Use package bridges (dead_load, live_load, etc.) to handle hyphenated directories
     const script = `
 import sys
 import json
@@ -33,6 +34,7 @@ sys.path.insert(0, '${this.skillBasePath.replace(/\\/g, '\\\\')}')
 try:
     # Read JSON parameters from stdin (safe from injection)
     params = json.loads(sys.stdin.read())
+    # Import using package bridges (e.g., dead_load for dead-load directory)
     from ${skillId.replace(/-/g, '_')}.runtime import execute
 
     result = execute(params)
