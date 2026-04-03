@@ -427,15 +427,69 @@ export class StiffnessMatrixUtils {
   }
 }
 
+// ============================================================================// 刚度常量
+// ============================================================================
+
+/**
+ * 刚度常量配置 / Stiffness Constants Configuration
+ *
+ * 这些常量用于定义不同类型约束的刚度值。
+ * 刚度值应根据单位制（如 kN/m）和求解器数值精度进行适当调整。
+ *
+ * 注意：过大或过小的刚度值都可能导致数值不稳定。
+ * 建议值范围：1e12 ~ 1e15（对于 kN/m 单位制）
+ */
+export const StiffnessConstants = {
+  /**
+   * 刚性刚度值 - 用于模拟"无穷大"刚度
+   * 默认值：1e15 kN/m
+   *
+   * 注意：
+   * - 过大（如 1e20）可能导致数值溢出或求解失败
+   * - 过小（如 1e10）可能导致约束不够刚性
+   * - 不同求解器可能有不同的数值精度限制
+   *
+   * @default 1e15
+   */
+  RIGID: 1e15,
+
+  /**
+   * 半刚性刚度值 - 用于模拟半刚性连接
+   * 默认值：1e12 kN/m
+   *
+   * @default 1e12
+   */
+  SEMI_RIGID: 1e12,
+
+  /**
+   * 弹性刚度值 - 用于模拟弹性支座或柔性连接
+   * 默认值：1e6 kN/m
+   *
+   * @default 1e6
+   */
+  ELASTIC: 1e6,
+
+  /**
+   * 柔性刚度值 - 用于模拟非常柔的约束
+   * 默认值：1e3 kN/m
+   *
+   * @default 1e3
+   */
+  FLEXIBLE: 1e3,
+} as const;
+
 // ============================================================================// 预定义约束模板
 // ============================================================================
 
 export const ConstraintPresets = {
   /**
    * 固定约束 - 所有自由度完全固定
-   * @param largeNumber 刚性刚度值（默认1e15，避免数值不稳定）
+   * @param largeNumber 刚性刚度值（默认使用 StiffnessConstants.RIGID）
+   *
+   * 注意：可自定义刚度值以适应不同的工程场景和求解器精度。
+   * 推荐使用 StiffnessConstants.RIGID 或其附近值（1e14 ~ 1e15）。
    */
-  FIXED: (largeNumber: number = 1e15): Matrix6x6Array => [
+  FIXED: (largeNumber: number = StiffnessConstants.RIGID): Matrix6x6Array => [
     [largeNumber, 0, 0, 0, 0, 0],
     [0, largeNumber, 0, 0, 0, 0],
     [0, 0, largeNumber, 0, 0, 0],
