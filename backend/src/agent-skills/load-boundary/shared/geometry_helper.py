@@ -250,32 +250,65 @@ class GeometryHelper:
                 if beam_direction == 'x':
                     # 当前梁沿X方向，检查其他梁是否也沿X方向
                     if abs(bdx) > abs(bdy):
-                        # 计算Y方向的距离
+                        # 计算Y方向的距离（保留方向信息）
                         other_avg_y = (n_i.y + n_j.y) / 2
-                        distance = abs(avg_y - other_avg_y)
+                        distance = other_avg_y - avg_y  # 有方向，正数在上方，负数在下方
                         parallel_beams.append((distance, elem))
                 else:
                     # 当前梁沿Y方向，检查其他梁是否也沿Y方向
                     if abs(bdy) > abs(bdx):
-                        # 计算X方向的距离
+                        # 计算X方向的距离（保留方向信息）
                         other_avg_x = (n_i.x + n_j.x) / 2
-                        distance = abs(avg_x - other_avg_x)
+                        distance = other_avg_x - avg_x  # 有方向，正数在右方，负数在左方
                         parallel_beams.append((distance, elem))
-
-            # 按距离排序
-            parallel_beams.sort(key=lambda x: x[0])
 
             # 计算受荷宽度
             if len(parallel_beams) >= 2:
-                # 有两侧的平行梁，受荷宽度 = (左侧距离 + 右侧距离) / 2
-                left_distance = parallel_beams[0][0]
-                right_distance = parallel_beams[1][0]
-                tributary_width = (left_distance + right_distance) / 2
-                logger.debug(
-                    f"Calculated tributary width for {element.id}: "
-                    f"{tributary_width:.2f} m (left={left_distance:.2f}, right={right_distance:.2f})"
-                )
-                return tributary_width
+                # 分别找到正方向和负方向最近的平行梁
+                positive_distances = [d for d, _ in parallel_beams if d > 0]
+                negative_distances = [d for d, _ in parallel_beams if d < 0]
+
+                left_distance = None
+                right_distance = None
+
+                if beam_direction == 'x':
+                    # X方向：负方向是左侧，正方向是右侧
+                    left_distance = min(abs(d) for d in negative_distances) if negative_distances else None
+                    right_distance = min(positive_distances) if positive_distances else None
+                else:
+                    # Y方向：负方向是下方，正方向是上方
+                    left_distance = min(abs(d) for d in negative_distances) if negative_distances else None
+                    right_distance = min(positive_distances) if positive_distances else None
+
+                # 根据找到的两侧梁计算受荷宽度
+                if left_distance is not None and right_distance is not None:
+                    # 两侧都有平行梁
+                    tributary_width = (left_distance + right_distance) / 2
+                    logger.debug(
+                        f"Calculated tributary width for {element.id}: "
+                        f"{tributary_width:.2f} m (left={left_distance:.2f}, right={right_distance:.2f})"
+                    )
+                    return tributary_width
+                elif left_distance is not None:
+                    # 只有单侧（左侧/下方）
+                    tributary_width = left_distance
+                    logger.debug(
+                        f"Calculated tributary width for {element.id}: "
+                        f"{tributary_width:.2f} m (single side left)"
+                    )
+                    return tributary_width
+                elif right_distance is not None:
+                    # 只有单侧（右侧/上方）
+                    tributary_width = right_distance
+                    logger.debug(
+                        f"Calculated tributary width for {element.id}: "
+                        f"{tributary_width:.2f} m (single side right)"
+                    )
+                    return tributary_width
+                else:
+                    # 所有梁在同一直线上，距离都为0
+                    logger.warning(f"All parallel beams are on same line for {element.id}")
+                    return 0.0
             elif len(parallel_beams) == 1:
                 # 只有一侧的平行梁，受荷宽度 = 单侧距离
                 tributary_width = parallel_beams[0][0]
