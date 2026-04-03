@@ -196,6 +196,7 @@ export interface SkillCompatibility {
 export interface SkillManifest extends AgentSkillMetadata {
   structuralTypeKeys: StructuralTypeKey[];
   domain: SkillDomain;
+  version: string;
   requires: string[];
   conflicts: string[];
   capabilities: string[];

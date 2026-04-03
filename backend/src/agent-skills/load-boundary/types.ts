@@ -1,5 +1,6 @@
 import type {
   LocalizedText,
+  SkillDomain,
   SkillStage,
   SkillCompatibility,
   AgentAnalysisType,
@@ -32,9 +33,10 @@ export interface LoadBoundaryExecutionOutput {
 
 export interface LoadBoundarySkillManifest {
   id: string;
+  structureType?: string; // Optional for cross-domain skills
   name: LocalizedText;
   description: LocalizedText;
-  triggers: string[];
+  triggers?: string[]; // Optional for cross-domain skills
   stages: SkillStage[];
   autoLoadByDefault: boolean;
   scenarioKeys: ScenarioTemplateKey[];
