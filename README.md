@@ -26,42 +26,72 @@ Main directories:
 
 - `frontend/`: Next.js 14 application
 - `backend/`: Fastify API, agent/chat flows, Prisma integration, and analysis execution host
-- `scripts/`: startup helpers and contract/regression checks
+- `scripts/`: startup helpers and the `sclaw` / `sclaw_cn` CLI implementation
+- `tests/`: regression runner (`node tests/runner.mjs ...`), install smoke, and CI-covered frontend checks (type-check, Vitest, lint) after native smoke
 - `docs/`: user handbook and protocol references
 
 ## Quick Start
 
+If Node.js is not installed yet, use the helper installer script first:
+
+```bash
+bash ./scripts/install-node-linux.sh
+```
+
+Windows PowerShell (run as Administrator for first-time package install):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/install-node-windows.ps1
+```
+
 Recommended local flow:
-
-```bash
-make doctor
-make start
-make status
-```
-
-Notes:
-
-- SQLite is now the default local database. A fresh setup writes to `.runtime/data/structureclaw.db`.
-- If your old local `.env` still points `DATABASE_URL` at a local PostgreSQL instance, `make doctor` and `make start` will auto-migrate that data into SQLite, rewrite `.env` to the SQLite default, and keep the original PostgreSQL URL in `POSTGRES_SOURCE_DATABASE_URL`.
-- That first auto-migration also creates a local backup file like `.env.pre-sqlite-migration.<timestamp>.bak`.
-
-Useful follow-up commands:
-
-```bash
-make logs
-make stop
-make backend-regression
-make analysis-regression
-```
-
-CLI alternative:
 
 ```bash
 ./sclaw doctor
 ./sclaw start
 ./sclaw status
-./sclaw logs all --follow
+```
+
+China mirror flow (same subcommands, mirror defaults enabled):
+
+```bash
+./sclaw_cn doctor
+./sclaw_cn start
+./sclaw_cn status
+```
+
+Notes:
+
+- SQLite is now the default local database. `./sclaw start` uses `.runtime/data/structureclaw.start.db`, and `./sclaw doctor` uses `.runtime/data/structureclaw.doctor.db` so preflight checks do not touch the active local runtime database.
+- `./sclaw doctor` no longer requires a preinstalled system Python 3.12. It will ensure `uv` and prepare `backend/.venv` with Python 3.12 automatically when needed. On Windows, this automatic setup currently requires `winget`; if `winget` is unavailable, install `uv` manually before running `./sclaw doctor`.
+- If your old local `.env` still points `DATABASE_URL` at a local PostgreSQL instance, `./sclaw doctor` and `./sclaw start` will auto-migrate that data into SQLite, rewrite `.env` to the SQLite default, and keep the original PostgreSQL URL in `POSTGRES_SOURCE_DATABASE_URL`.
+- That first auto-migration also creates a local backup file like `.env.pre-sqlite-migration.<timestamp>.bak`.
+- `sclaw_cn` defaults to China mirror settings when unset: `PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`, `NPM_CONFIG_REGISTRY=https://registry.npmmirror.com`, and Docker mirror prefix via `DOCKER_REGISTRY_MIRROR`.
+- You can override mirror values in `.env` or shell environment (`PIP_INDEX_URL`, `NPM_CONFIG_REGISTRY`, `DOCKER_REGISTRY_MIRROR`, `APT_MIRROR`).
+
+Useful follow-up commands:
+
+```bash
+./sclaw logs
 ./sclaw stop
+node tests/runner.mjs backend-regression
+node tests/runner.mjs analysis-regression
+```
+
+Use the built-in CLI batch convert command to transform structure model JSON files and write a summary report:
+
+```bash
+./sclaw convert-batch --input-dir tmp/input --output-dir tmp/output --report tmp/report.json --target-format compact-1
+```
+
+Windows PowerShell:
+
+```powershell
+node .\sclaw doctor
+node .\sclaw start
+node .\sclaw status
+node .\sclaw logs all --follow
+node .\sclaw stop
 ```
 
 ### Windows / Docker Quick Start
@@ -72,17 +102,16 @@ Recommended steps:
 
 1. Install and start Docker Desktop.
 2. If Docker Desktop asks you to enable WSL 2 or required container features on first launch, follow the setup wizard and restart Docker Desktop.
-3. Create `.env` from `.env.example` in the project root, and at minimum fill in `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, and `LLM_BASE_URL`.
-4. Start the full stack with Docker Compose:
+3. Run the interactive Docker bootstrap command from the project root:
 
-```bash
-make docker-up
+```powershell
+node .\sclaw docker-install
 ```
 
-If your Windows environment does not have `make`, run:
+For CI or scripted setup, use the non-interactive variant:
 
-```bash
-docker compose up --build
+```powershell
+node .\sclaw docker-install --non-interactive --llm-provider openai --llm-base-url https://api.openai.com/v1 --llm-api-key <your-key> --llm-model gpt-4.1
 ```
 
 Once the stack is ready, the main entrypoints are:
@@ -95,7 +124,7 @@ Once the stack is ready, the main entrypoints are:
 To stop the containers:
 
 ```bash
-make docker-down
+node .\sclaw docker-stop
 ```
 
 Or:

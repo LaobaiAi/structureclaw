@@ -8,16 +8,24 @@ It is written for typical open source collaboration through a fork-and-pull-requ
 
 ## Before You Start
 
-1. Read [README.md](/home/openclaw/structureclaw/README.md), [docs/handbook.md](/home/openclaw/structureclaw/docs/handbook.md), and [docs/reference.md](/home/openclaw/structureclaw/docs/reference.md).
+1. Read [README.md](README.md), [docs/handbook.md](docs/handbook.md), and [docs/reference.md](docs/reference.md).
 2. Make sure your local environment works:
 
 ```bash
-make doctor
-make start
-make status
+./sclaw doctor
+./sclaw start
+./sclaw status
 ```
 
-3. If your change touches chat, agent orchestration, reports, converters, or schema behavior, identify the matching validation script in `scripts/` before you start.
+If you work behind mainland China network constraints, use the mirror-enabled entrypoint with the same subcommands:
+
+```bash
+./sclaw_cn doctor
+./sclaw_cn start
+./sclaw_cn status
+```
+
+3. If your change touches chat, agent orchestration, reports, converters, or schema behavior, identify the matching validator with `node tests/runner.mjs validate --list` before you start.
 
 ## Contribution Rules
 
@@ -111,7 +119,7 @@ git push origin --delete my-feature
 - Backend: keep route handlers thin; put orchestration and domain logic in services.
 - Frontend: keep route/layout code in app routes and reusable UI in components.
 - Analysis runtime: keep engine, schema, and regression behavior deterministic and scriptable.
-- Scripts: prefer extending existing validation scripts instead of creating one-off local-only helpers.
+- Scripts: prefer extending the existing regression runner (`node tests/runner.mjs validate ...`) instead of creating one-off local-only helpers.
 
 ### Language and UX rules
 
@@ -148,17 +156,17 @@ npm run test:run --prefix frontend
 Analysis runtime and cross-service validation:
 
 ```bash
-make backend-regression
-make analysis-regression
+node tests/runner.mjs backend-regression
+node tests/runner.mjs analysis-regression
 ```
 
 Useful targeted validators:
 
 ```bash
-./scripts/validate-agent-orchestration.sh
-./scripts/validate-chat-stream-contract.sh
-./scripts/validate-analyze-contract.sh
-./scripts/validate-converter-api-contract.sh
+node tests/runner.mjs validate validate-agent-orchestration
+node tests/runner.mjs validate validate-chat-stream-contract
+node tests/runner.mjs validate validate-analyze-contract
+node tests/runner.mjs validate validate-converter-api-contract
 ```
 
 Expectation by change type:
@@ -223,7 +231,7 @@ Convert the PR to ready-for-review only after the validation checklist is meanin
 ## Security and Secrets
 
 - Never commit live secrets, tokens, or private keys.
-- Use `.env.example` and `backend/.env.example` as templates.
+- Use `.env.example` as the template.
 - Keep production credentials outside the repository.
 - Document new configuration defaults when your change depends on them.
 
@@ -235,4 +243,4 @@ Convert the PR to ready-for-review only after the validation checklist is meanin
 
 ## Language Counterpart
 
-Chinese version: [CONTRIBUTING_CN.md](/home/openclaw/structureclaw/CONTRIBUTING_CN.md)
+Chinese version: [CONTRIBUTING_CN.md](CONTRIBUTING_CN.md)

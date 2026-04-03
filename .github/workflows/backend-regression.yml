@@ -4,21 +4,31 @@ on:
   pull_request:
     paths:
       - 'backend/**'
-      - 'scripts/**'
-      - 'Makefile'
+      - 'scripts/cli/**'
+      - 'tests/**'
+      - 'sclaw'
+      - 'sclaw_cn'
+      - 'package.json'
       - '.github/workflows/backend-regression.yml'
   push:
     branches:
       - master
     paths:
       - 'backend/**'
-      - 'scripts/**'
-      - 'Makefile'
+      - 'scripts/cli/**'
+      - 'tests/**'
+      - 'sclaw'
+      - 'sclaw_cn'
+      - 'package.json'
       - '.github/workflows/backend-regression.yml'
 
 jobs:
   backend-regression:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
     steps:
@@ -36,4 +46,5 @@ jobs:
         run: npm ci --prefix backend
 
       - name: Run Backend Regression
-        run: make backend-regression
+        shell: bash
+        run: node tests/runner.mjs backend-regression

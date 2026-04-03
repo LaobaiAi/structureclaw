@@ -4,115 +4,119 @@ import userEvent from '@testing-library/user-event'
 import { AIConsole } from '@/components/chat/ai-console'
 import { API_BASE } from '@/lib/api-base'
 
+function fetchInputUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') {
+    return input
+  }
+  if (typeof URL !== 'undefined' && input instanceof URL) {
+    return input.href
+  }
+  if (typeof Request !== 'undefined' && input instanceof Request) {
+    return input.url
+  }
+  return String(input)
+}
+
+function createSseResponse(events: unknown[]) {
+  const encoder = new TextEncoder()
+  const chunks = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).concat('data: [DONE]\n\n')
+  const stream = new ReadableStream({
+    start(controller) {
+      chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)))
+      controller.close()
+    },
+  })
+
+  return {
+    ok: true,
+    body: stream,
+  } as unknown as Response
+}
+
 describe('AIConsole prompt and thinking details', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
-      const url = String(input)
+      const url = fetchInputUrl(input)
 
       if (url === `${API_BASE}/api/v1/agent/skills`) {
-        return {
-          ok: true,
-          json: async () => ([
-            {
-              id: 'beam',
-              name: { zh: '梁', en: 'Beam' },
-              description: { zh: 'beam', en: 'beam' },
-              autoLoadByDefault: true,
-            },
-          ]),
-        } as Response
+        return Response.json([
+          {
+            id: 'beam',
+            name: { zh: '梁', en: 'Beam' },
+            description: { zh: 'beam', en: 'beam' },
+            autoLoadByDefault: true,
+          },
+        ])
       }
 
       if (url.startsWith(`${API_BASE}/api/v1/agent/skillhub/search`)) {
-        return {
-          ok: true,
-          json: async () => ({ items: [] }),
-        } as Response
+        return Response.json({ items: [] })
       }
 
       if (url === `${API_BASE}/api/v1/agent/skillhub/installed`) {
-        return {
-          ok: true,
-          json: async () => ({ items: [] }),
-        } as Response
+        return Response.json({ items: [] })
       }
 
       if (url.startsWith(`${API_BASE}/api/v1/agent/capability-matrix`)) {
-        return {
-          ok: true,
-          json: async () => ({
-            skills: [{ id: 'beam', domain: 'structure-type' }],
-            skillDomainById: { beam: 'structure-type' },
-            domainSummaries: [{ domain: 'structure-type', skillIds: ['beam'] }],
-          }),
-        } as Response
+        return Response.json({
+          skills: [{ id: 'beam', domain: 'structure-type' }],
+          skillDomainById: { beam: 'structure-type' },
+          domainSummaries: [{ domain: 'structure-type', skillIds: ['beam'] }],
+        })
       }
 
       if (url === `${API_BASE}/api/v1/chat/conversations`) {
-        return {
-          ok: true,
-          json: async () => ([]),
-        } as Response
+        return Response.json([])
       }
 
       if (url === `${API_BASE}/api/v1/models/latest`) {
-        return {
-          ok: true,
-          json: async () => ({ model: null }),
-        } as Response
+        return Response.json({ model: null })
       }
 
       if (url === `${API_BASE}/api/v1/chat/conversation` && init?.method === 'POST') {
-        return {
-          ok: true,
-          json: async () => ({ id: 'conv-debug-1', title: 'Prompt Debug' }),
-        } as Response
+        return Response.json({ id: 'conv-debug-1', title: 'Prompt Debug' })
       }
 
-      if (url === `${API_BASE}/api/v1/chat/execute`) {
-        return {
-          ok: true,
-          json: async () => ({
-            response: 'Execution completed for prompt-debug test.',
-            success: true,
-            routing: {
-              selectedSkillIds: ['beam'],
-              structuralSkillId: 'beam',
-              structuralScenarioKey: 'beam',
-              analysisSkillId: 'opensees-static',
-              analysisSkillIds: ['opensees-static'],
+      if (url.includes('/api/v1/chat/stream')) {
+        return createSseResponse([
+          {
+            type: 'result',
+            content: {
+              response: 'Execution completed for prompt-debug test.',
+              success: true,
+              routing: {
+                selectedSkillIds: ['beam'],
+                structuralSkillId: 'beam',
+                structuralScenarioKey: 'beam',
+                analysisSkillId: 'opensees-static',
+                analysisSkillIds: ['opensees-static'],
+              },
+              plan: ['Draft model payload', 'Analyze structure', 'Generate report summary'],
+              toolCalls: [
+                {
+                  tool: 'analyze_structure',
+                  status: 'success',
+                  durationMs: 120,
+                  input: { analysisType: 'static' },
+                  output: { status: 'ok' },
+                },
+                {
+                  tool: 'generate_report',
+                  status: 'error',
+                  error: 'mock report failure',
+                },
+              ],
             },
-            plan: ['Draft model payload', 'Analyze structure', 'Generate report summary'],
-            toolCalls: [
-              {
-                tool: 'analyze_structure',
-                status: 'success',
-                durationMs: 120,
-                input: { analysisType: 'static' },
-                output: { status: 'ok' },
-              },
-              {
-                tool: 'generate_report',
-                status: 'error',
-                error: 'mock report failure',
-              },
-            ],
-          }),
-        } as Response
+          },
+        ])
       }
 
       if (url.includes('/snapshot') && init?.method === 'POST') {
-        return {
-          ok: true,
-          json: async () => ({ ok: true }),
-        } as Response
+        return Response.json({ ok: true })
       }
 
-      return {
-        ok: true,
-        json: async () => ({}),
-      } as Response
+      return Response.json({})
     })
   })
 
@@ -125,10 +129,9 @@ describe('AIConsole prompt and thinking details', () => {
     render(<AIConsole />)
 
     const composer = await screen.findByPlaceholderText(/describe your structural goal/i)
-    await user.click(screen.getByRole('button', { name: /expand skills/i }))
-    await user.click(screen.getByRole('button', { name: 'Beam' }))
+    await user.click(screen.getByRole('button', { name: /expand engineering context/i }))
     await user.type(composer, 'Run static beam check for prompt debug test')
-    await user.click(screen.getByRole('button', { name: /run analysis/i }))
+    await user.click(screen.getByRole('button', { name: /send/i }))
 
     await waitFor(() => {
       expect(screen.getAllByText(/execution completed for prompt-debug test/i).length).toBeGreaterThan(0)
