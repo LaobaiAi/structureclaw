@@ -1,4 +1,12 @@
-import type { SkillManifest } from '../../agent-runtime/types.js';
+import type {
+  LocalizedText,
+  SkillDomain,
+  SkillStage,
+  SkillCompatibility,
+  AgentAnalysisType,
+  MaterialFamily,
+} from '../../agent-runtime/types.js';
+import type { ScenarioTemplateKey } from '../../agent-runtime/types.js';
 
 export type LoadBoundarySkillId =
   | 'dead-load'
@@ -23,10 +31,28 @@ export interface LoadBoundaryExecutionOutput {
   error?: string;
 }
 
-export interface LoadBoundarySkillManifest extends SkillManifest {
+export interface LoadBoundarySkillManifest {
+  id: string;
+  structureType?: string; // Optional for cross-domain skills
+  name: LocalizedText;
+  description: LocalizedText;
+  triggers?: string[]; // Optional for cross-domain skills
+  stages: SkillStage[];
+  autoLoadByDefault: boolean;
+  scenarioKeys: ScenarioTemplateKey[];
   domain: 'load-boundary';
+  version: string;
+  requires: string[];
+  conflicts: string[];
+  capabilities: string[];
+  supportedAnalysisTypes?: AgentAnalysisType[];
+  materialFamilies?: MaterialFamily[];
+  priority: number;
+  compatibility: SkillCompatibility;
   supportedModelFamilies?: string[];
   loadTypes?: string[];
   boundaryTypes?: string[];
   combinationTypes?: string[];
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
 }

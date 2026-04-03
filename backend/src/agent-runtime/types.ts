@@ -732,6 +732,7 @@ export interface SkillCompatibility {
 export interface SkillManifest extends AgentSkillMetadata {
   scenarioKeys: ScenarioTemplateKey[];
   domain: SkillDomain;
+  version: string;
   requires: string[];
   conflicts: string[];
   capabilities: string[];
