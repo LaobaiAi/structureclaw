@@ -24,7 +24,8 @@ from constants import (
     validate_floor_load_type,
     get_default_tributary_width
 )
-from model_data_helper import ModelDataHelper, GeometryHelper
+from model_data_helper import ModelDataHelper
+from geometry_helper import GeometryHelper
 
 logger = logging.getLogger(__name__)
 

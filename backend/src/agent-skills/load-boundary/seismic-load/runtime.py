@@ -100,8 +100,13 @@ class SeismicLoadGenerator(LoadGeneratorBase):
             base_shear=base_shear
         )
 
-        for story_idx, (story_id, elements) in enumerate(elements_by_story.items()):
-            story_force = story_forces[story_idx]
+        for story_id, elements in elements_by_story.items():
+            # 跳过没有分配地震力的楼层（如地下室）
+            if story_id not in story_forces:
+                logger.debug(f"Story {story_id}: skipped (no force assigned)")
+                continue
+
+            story_force = story_forces[story_id]
 
             distributed_forces = self.force_distributor.distribute_force_to_floor(
                 floor_elements=elements,
@@ -158,10 +163,10 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         logger.debug(f"Seismic load {load_value} kN on {element_id}, dir={seismic_direction}")
         return load_action
 
-    def _distribute_seismic_force(self, elements_by_story: Dict[str, list], base_shear: float) -> List[float]:
+    def _distribute_seismic_force(self, elements_by_story: Dict[str, list], base_shear: float) -> Dict[str, float]:
 
         if not elements_by_story:
-            return []
+            return {}
 
         # 使用楼层标高进行排序，支持复杂命名如 'B1', '1F', 'RF'
         story_ids = sorted(elements_by_story.keys(), key=lambda x: self._get_story_height(x))
@@ -200,14 +205,17 @@ class SeismicLoadGenerator(LoadGeneratorBase):
 
             logger.debug(f"Story {story_id}: weight={story_weight:.2f}kN, h={story_height:.2f}m")
 
-        story_forces = []
+        # 返回 story_id -> force 映射，避免索引不匹配
+        story_forces_dict = {}
         for data in story_data:
             force = base_shear * data['weighted_height'] / total_weighted_height
-            story_forces.append(force)
+            story_forces_dict[data['id']] = force
 
-        logger.info(f"Story forces: total={base_shear:.2f}kN, {[f'{f:.2f}kN' for f in story_forces]}")
+        logger.info(f"Story forces: total={base_shear:.2f}kN, {len(story_forces_dict)} stories")
+        for story_id, force in story_forces_dict.items():
+            logger.debug(f"  {story_id}: {force:.2f}kN")
 
-        return story_forces
+        return story_forces_dict
 
     def _calculate_story_weight(self, elements: list) -> float:
         total_weight = 0.0
@@ -234,7 +242,7 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         section: Any
     ) -> float:
         from constants import KG_TO_KN
-        from model_data_helper import GeometryHelper
+        from geometry_helper import GeometryHelper
 
         elem_length = GeometryHelper.calculate_element_length(element, self.model_helper)
         if elem_length is None or elem_length <= 0:

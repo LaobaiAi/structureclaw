@@ -19,7 +19,8 @@ from constants import (
     validate_load_value,
     validate_element_type
 )
-from model_data_helper import ModelDataHelper, GeometryHelper
+from model_data_helper import ModelDataHelper
+from geometry_helper import GeometryHelper
 
 logger = logging.getLogger(__name__)
 
