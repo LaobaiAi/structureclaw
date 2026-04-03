@@ -292,3 +292,50 @@ class GeometryHelper:
         except Exception as e:
             logger.warning(f"Error calculating tributary width for {getattr(element, 'id', 'unknown')}: {e}")
             return None
+
+    @staticmethod
+    def calculate_element_direction_vector(element: Any, node_helper: Any) -> Optional[Dict[str, float]]:
+        """
+        计算构件轴向方向向量
+
+        Args:
+            element: 构件对象
+            node_helper: 节点数据辅助类
+
+        Returns:
+            单位方向向量 {"x": dx, "y": dy, "z": dz}，如果无法计算则返回 None
+
+        Examples:
+            >>> direction = GeometryHelper.calculate_element_direction_vector(element, node_helper)
+            >>> if direction:
+            ...     print(f"Direction: ({direction['x']:.3f}, {direction['y']:.3f}, {direction['z']:.3f})")
+        """
+        if not hasattr(element, 'nodes') or len(element.nodes) < 2:
+            logger.warning(f"Element '{getattr(element, 'id', 'unknown')}' has invalid nodes")
+            return None
+
+        # 获取两端节点
+        node_i = node_helper.get_node(element.nodes[0])
+        node_j = node_helper.get_node(element.nodes[1])
+
+        if not node_i or not node_j:
+            logger.warning(
+                f"Cannot find nodes for element '{getattr(element, 'id', 'unknown')}': "
+                f"{element.nodes[0]}, {element.nodes[1]}"
+            )
+            return None
+
+        # 计算方向向量
+        dx = node_j.x - node_i.x
+        dy = node_j.y - node_i.y
+        dz = node_j.z - node_i.z
+
+        # 计算向量长度
+        length = math.sqrt(dx**2 + dy**2 + dz**2)
+
+        if length == 0:
+            logger.warning(f"Element '{getattr(element, 'id', 'unknown')}' has zero length")
+            return None
+
+        # 归一化为单位向量
+        return {"x": dx / length, "y": dy / length, "z": dz / length}
