@@ -605,7 +605,9 @@ def apply_boundary_conditions(model: StructureModelV2, parameters: Dict[str, Any
 
     # 计算计算长度
     if calculate_effective_lengths:
-        if member_ids and all(m.startswith('C') for m in member_ids):
+        if member_ids and all(next((e for e in generator.model.elements if e.id == m), None) and
+                           next((e for e in generator.model.elements if e.id == m), None).type == "column"
+                           for m in member_ids):
             generator.apply_column_effective_lengths(member_ids)
         else:
             generator.calculate_effective_lengths(member_ids)

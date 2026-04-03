@@ -359,8 +359,21 @@ export class StiffnessMatrixUtils {
    * 判断是否为接口形式的6x6矩阵
    */
   private static isMatrix6x6(input: any): input is Matrix6x6 {
-    return typeof input === 'object' && input !== null &&
-           'Fx_ux' in input && 'Mz_rz' in input;
+    if (typeof input !== 'object' || input === null) {
+      return false;
+    }
+
+    // 检查所有必需字段（每个力/力矩行至少一个字段，加上首尾字段作为边界检查）
+    const requiredFields = [
+      'Fx_ux', 'Fx_uy', 'Fx_uz', 'Fx_rx', 'Fx_ry', 'Fx_rz',
+      'Fy_ux', 'Fy_uy', 'Fy_uz', 'Fy_rx', 'Fy_ry', 'Fy_rz',
+      'Fz_ux', 'Fz_uy', 'Fz_uz', 'Fz_rx', 'Fz_ry', 'Fz_rz',
+      'Mx_ux', 'Mx_uy', 'Mx_uz', 'Mx_rx', 'Mx_ry', 'Mx_rz',
+      'My_ux', 'My_uy', 'My_uz', 'My_rx', 'My_ry', 'My_rz',
+      'Mz_ux', 'Mz_uy', 'Mz_uz', 'Mz_rx', 'Mz_ry', 'Mz_rz'
+    ];
+
+    return requiredFields.every(field => field in input);
   }
 
   /**
