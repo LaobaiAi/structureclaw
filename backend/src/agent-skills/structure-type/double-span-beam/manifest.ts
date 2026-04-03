@@ -2,6 +2,7 @@ import type { SkillManifest } from '../../../agent-runtime/types.js';
 
 export const manifest: SkillManifest = {
   id: 'double-span-beam',
+  version: '1.0.0',
   structureType: 'double-span-beam',
   name: {
     zh: '双跨梁',
