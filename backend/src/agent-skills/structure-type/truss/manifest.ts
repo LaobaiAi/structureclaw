@@ -2,6 +2,7 @@ import type { SkillManifest } from '../../../agent-runtime/types.js';
 
 export const manifest: SkillManifest = {
   id: 'truss',
+  version: '1.0.0',
   structureType: 'truss',
   name: {
     zh: '桁架',

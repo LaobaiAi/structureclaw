@@ -2,6 +2,7 @@ import type { SkillManifest } from '../../../agent-runtime/types.js';
 
 export const manifest: SkillManifest = {
   id: 'beam',
+  version: '1.0.0',
   structureType: 'beam',
   name: {
     zh: '梁',

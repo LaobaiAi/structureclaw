@@ -33,10 +33,9 @@ export interface LoadBoundaryExecutionOutput {
 
 export interface LoadBoundarySkillManifest {
   id: string;
-  structureType?: string; // Optional for cross-domain skills
   name: LocalizedText;
   description: LocalizedText;
-  triggers?: string[]; // Optional for cross-domain skills
+  triggers: string[];
   stages: SkillStage[];
   autoLoadByDefault: boolean;
   scenarioKeys: ScenarioTemplateKey[];
