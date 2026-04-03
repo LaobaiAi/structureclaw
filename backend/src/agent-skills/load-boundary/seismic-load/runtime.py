@@ -159,19 +159,35 @@ class SeismicLoadGenerator(LoadGeneratorBase):
         return load_action
 
     def _distribute_seismic_force(self, elements_by_story: Dict[str, list], base_shear: float) -> List[float]:
-        from constants import DEFAULT_FLOOR_HEIGHT
 
         if not elements_by_story:
             return []
 
-        story_ids = sorted(elements_by_story.keys(), key=lambda x: int(''.join(filter(str.isdigit, x)) or '0'))
+        # 使用楼层标高进行排序，支持复杂命名如 'B1', '1F', 'RF'
+        story_ids = sorted(elements_by_story.keys(), key=lambda x: self._get_story_height(x))
+
+        # 获取所有楼层的实际标高
+        story_elevations = {}
+        for story_id in story_ids:
+            elevation = self._get_story_height(story_id)
+            story_elevations[story_id] = elevation
+
+        # 计算基准标高（最低楼层的标高）
+        base_elevation = min(story_elevations.values()) if story_elevations else 0.0
 
         story_data = []
         total_weighted_height = 0.0
 
-        for i, story_id in enumerate(story_ids, start=1):
+        for story_id in story_ids:
             story_weight = self._calculate_story_weight(elements_by_story[story_id])
-            story_height = i * DEFAULT_FLOOR_HEIGHT
+            # 使用相对高度（楼层标高 - 基准标高）
+            story_height = story_elevations[story_id] - base_elevation
+
+            # 跳过相对高度为负或零的楼层（地下室或基准层）
+            if story_height <= 0:
+                logger.debug(f"Story {story_id}: skipped (height={story_height:.2f}m <= 0)")
+                continue
+
             weighted_height = story_weight * story_height
             total_weighted_height += weighted_height
 

@@ -111,6 +111,13 @@ class TemperatureLoadGenerator:
         axial_force_n = E * area * thermal_strain
         axial_force_kn = axial_force_n / 1000.0
 
+        # 计算构件轴向方向向量
+        from geometry_helper import GeometryHelper
+        load_direction = GeometryHelper.calculate_element_direction_vector(element, self.model)
+        if load_direction is None:
+            # 如果无法计算方向，默认使用X方向
+            load_direction = {"x": 1.0, "y": 0.0, "z": 0.0}
+
         return {
             "id": f"TEMP_{element.id}",
             "caseId": case_id,
@@ -118,7 +125,7 @@ class TemperatureLoadGenerator:
             "elementId": element.id,
             "loadType": "axial_force",
             "loadValue": axial_force_kn,
-            "loadDirection": {"x": 1.0, "y": 0.0, "z": 0.0},
+            "loadDirection": load_direction,
             "position": {"x": 0.0, "y": 0.0, "z": 0.0},
             "extra": {
                 "thermal_strain": thermal_strain,
