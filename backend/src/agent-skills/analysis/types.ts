@@ -24,7 +24,7 @@ export type AnalysisModelFamily = 'frame' | 'truss' | 'generic';
 
 export interface AnalysisSkillManifest {
   id: string;
-  domain: 'analysis';
+  domain: 'analysis-strategy';
   name: LocalizedText;
   description: LocalizedText;
   software: AnalysisSoftware;

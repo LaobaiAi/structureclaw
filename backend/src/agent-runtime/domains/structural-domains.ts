@@ -21,7 +21,6 @@ const LOAD_BOUNDARY_DOMAIN_KEYS = [
   'loadKN',
   'loadType',
   'loadPosition',
-  'loadPositionM',
   'floorLoads',
 ] as const;
 

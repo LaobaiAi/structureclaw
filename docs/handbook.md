@@ -4,7 +4,7 @@
 
 This handbook is the practical guide for running, developing, validating, and extending StructureClaw.
 
-Use this file for day-to-day engineering work. Use `docs/reference.md` for protocol-level details and `docs/agent-architecture.md` for the target agent architecture.
+Use this file for day-to-day engineering work. Use `docs/reference.md` for protocol-level details.
 
 ## 2. Project Scope
 
@@ -16,7 +16,7 @@ StructureClaw is an AI-assisted structural engineering platform with a monorepo 
 Primary workflow:
 
 ```text
-natural language -> draft_model -> validate_model -> run_analysis -> run_code_check -> generate_report
+natural language -> draft model -> validate -> analyze -> code-check -> report
 ```
 
 ## 3. Prerequisites
@@ -24,7 +24,7 @@ natural language -> draft_model -> validate_model -> run_analysis -> run_code_ch
 Recommended local setup:
 
 - Node.js 18+
-- Python 3.12
+- Python 3.11
 
 Optional:
 
@@ -39,41 +39,27 @@ frontend/   Next.js application
 backend/    Fastify API, agent skills, hosted analysis runtime, Prisma schema, tests
 scripts/    startup scripts and contract/regression validators
 docs/       handbook and protocol reference
-.runtime/   local runtime data, logs, and generated report artifacts
+uploads/    generated report artifacts
 ```
 
 ## 5. Getting Started
 
-### 5.0 Node.js setup (optional)
-
-If Node.js is not installed yet, use the helper installer script first:
-
-```bash
-bash ./scripts/install-node-linux.sh
-```
-
-Windows PowerShell (run as Administrator for first-time package install):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File ./scripts/install-node-windows.ps1
-```
-
 ### 5.1 Recommended path
 
 ```bash
-./sclaw doctor
-./sclaw start
-./sclaw status
+make doctor
+make start
+make status
 ```
 
-`./sclaw start` is the SQLite local-first startup path. It starts frontend and backend from source and does not invoke Docker.
+`make start` is the SQLite local-first startup path. It starts frontend and backend from source and does not invoke Docker.
 
 ### 5.2 Common lifecycle commands
 
 ```bash
-./sclaw logs
-./sclaw stop
-./sclaw restart
+make logs
+make stop
+make restart
 ```
 
 ### 5.3 CLI alternative
@@ -89,45 +75,14 @@ powershell -ExecutionPolicy Bypass -File ./scripts/install-node-windows.ps1
 ### 5.4 Windows PowerShell
 
 ```powershell
-node .\sclaw doctor
-node .\sclaw start
-node .\sclaw status
-node .\sclaw logs all --follow
-node .\sclaw stop
+.\make.ps1 doctor
+.\make.ps1 start
+.\make.ps1 status
+.\make.ps1 logs all --follow
+.\make.ps1 stop
 ```
 
-For Docker-based Windows onboarding, use `node .\sclaw docker-install`, `node .\sclaw docker-start`, and `node .\sclaw docker-stop`.
-
-### 5.5 SkillHub CLI
-
-Manage installable skills from the command line:
-
-```bash
-./sclaw skill list                          # list installed skills
-./sclaw skill search <keyword> [domain]     # search the skill registry
-./sclaw skill install <skill-id>            # install a skill
-./sclaw skill enable <skill-id>             # enable an installed skill
-./sclaw skill disable <skill-id>            # disable a skill
-./sclaw skill uninstall <skill-id>          # uninstall a skill
-```
-
-### 5.6 China mirror CLI entrypoint
-
-`sclaw_cn` keeps the same subcommands as `sclaw` and applies mirror defaults when not set explicitly.
-
-```bash
-./sclaw_cn doctor
-./sclaw_cn setup-analysis-python
-./sclaw_cn docker-start
-```
-
-Default mirror values in `sclaw_cn`:
-
-- `PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`
-- `NPM_CONFIG_REGISTRY=https://registry.npmmirror.com`
-- `DOCKER_REGISTRY_MIRROR=docker.m.daocloud.io/`
-
-You can override any of them in `.env` or shell environment variables.
+`make.ps1` is the native Windows entrypoint for the common local-development lifecycle. `make.cmd` is included as a thin launcher for cmd.exe users.
 
 ## 6. Environment and Configuration
 
@@ -142,7 +97,7 @@ Important variables:
 
 Notes:
 
-- `./sclaw start` and `./sclaw restart` default to `.runtime/data/structureclaw.start.db`; `./sclaw doctor` uses `.runtime/data/structureclaw.doctor.db` so startup checks stay isolated from the active local runtime database.
+- `DATABASE_URL` defaults to a local SQLite file under `.runtime/data`.
 - `REDIS_URL=disabled` enables in-memory fallback mode in backend.
 - `ANALYSIS_PYTHON_BIN` defaults to `backend/.venv/bin/python`.
 
@@ -154,21 +109,16 @@ Main backend endpoints:
 
 - `POST /api/v1/chat/message`
 - `POST /api/v1/chat/stream`
+- `POST /api/v1/chat/execute`
 - `POST /api/v1/agent/run`
 
-Current execution chain:
+Execution chain:
 
-`draft_model -> convert_model -> validate_model -> run_analysis -> run_code_check -> generate_report`
-
-Architecture note:
-
-- Public product interaction should converge on a single chat-first entry.
-- Skills and tools are optional capability layers.
-- See `docs/agent-architecture.md` for the target capability-driven design.
+`text-to-model-draft -> convert -> validate -> analyze -> code-check -> report`
 
 ### 7.2 Backend-hosted analysis runtime
 
-Execution endpoints exposed by backend:
+Compatibility endpoints exposed by backend:
 
 - `POST /validate`
 - `POST /convert`
@@ -180,33 +130,13 @@ Execution endpoints exposed by backend:
 
 - Required baseline: `schema_version: "1.0.0"`
 - Keep strict field naming for nodes/elements/materials/sections/loads
-- Always run `validate_model` before `run_analysis` / `run_code_check` where possible
+- Always validate models before analyze/code-check where possible
 
 ## 9. Skill and No-Skill Behavior
 
-- Skills and tools are optional capability layers, not a hard dependency for base chat.
-- If no engineering skills are enabled, StructureClaw should stay on the base chat path.
-- `structure-type` is the engineering entry skill domain.
-- The target architecture includes a built-in `structure-type/generic` fallback skill inside that domain.
+- Skills are enhancement layers, not a hard dependency for the full workflow.
+- If selected skills do not match the request, fallback uses generic no-skill modeling.
 - New user-visible copy must be provided in both English and Chinese.
-
-Built-in skill domains under `backend/src/agent-skills/`:
-
-| Domain | Description |
-|---|---|
-| `structure-type` | Structural type recognition (beam, frame, truss, portal-frame, etc.) |
-| `analysis` | OpenSees and Simplified analysis execution |
-| `code-check` | Design code compliance checking |
-| `data-input` | Structured data input parsing |
-| `design` | Structural design assistance |
-| `drawing` | Drawing and visualization generation |
-| `load-boundary` | Load and boundary condition handling |
-| `material` | Material property management |
-| `report-export` | Report generation and export |
-| `result-postprocess` | Post-processing of analysis results |
-| `section` | Cross-section property calculation |
-| `validation` | Model validation checks |
-| `visualization` | 3D model visualization |
 
 ## 10. Quality and Regression
 
@@ -229,16 +159,16 @@ npm run test:run --prefix frontend
 ### 10.3 Analysis runtime and contracts
 
 ```bash
-node tests/runner.mjs analysis-regression
-node tests/runner.mjs backend-regression
+make analysis-regression
+make backend-regression
 ```
 
 Useful targeted validators:
 
-- `node tests/runner.mjs validate validate-agent-orchestration`
-- `node tests/runner.mjs validate validate-agent-tools-contract`
-- `node tests/runner.mjs validate validate-chat-stream-contract`
-- `node tests/runner.mjs validate validate-analyze-contract`
+- `./scripts/validate-agent-orchestration.sh`
+- `./scripts/validate-agent-tools-contract.sh`
+- `./scripts/validate-chat-stream-contract.sh`
+- `./scripts/validate-analyze-contract.sh`
 
 ## 11. Contributing Workflow
 
@@ -252,17 +182,15 @@ Contribution details: `CONTRIBUTING.md`.
 
 ## 12. Troubleshooting
 
-- If startup fails, run `./sclaw doctor` first.
+- If startup fails, run `make doctor` first.
 - If DB-related tests fail locally, verify that `DATABASE_URL` starts with `file:` and points to a writable local path.
 - If LLM flow degrades unexpectedly, confirm `LLM_PROVIDER` and API key env variables.
-- If contracts fail, run the corresponding `node tests/runner.mjs validate <name>` command directly for focused diagnostics.
+- If contracts fail, run the corresponding `scripts/validate-*.sh` script directly for focused diagnostics.
 
 ## 13. Related Documents
 
 - Protocol reference: `docs/reference.md`
-- Agent architecture: `docs/agent-architecture.md`
 - Chinese handbook: `docs/handbook_CN.md`
 - Chinese protocol reference: `docs/reference_CN.md`
-- Chinese agent architecture: `docs/agent-architecture_CN.md`
 - English overview: `README.md`
 - Chinese overview: `README_CN.md`

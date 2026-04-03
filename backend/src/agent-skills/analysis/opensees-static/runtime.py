@@ -8,24 +8,11 @@ from structure_protocol.structure_model_v1 import StructureModelV1
 
 
 class OpenSeesStaticAnalyzer(StaticAnalyzer):
-    """Bridges StructureModelV1 node/element IDs to OpenSees integer tags.
-
-    Inherits StaticAnalyzer (from the opensees-static library) which owns the
-    bulk of the static analysis logic; this subclass only overrides the tag
-    look-up methods required by OpenSeesPy.
-    """
-
-    def __init__(self, model: StructureModelV1) -> None:
+    def __init__(self, model):
         super().__init__(model)
-        self._ops_node_tags = {
-            str(node.id): index + 1 for index, node in enumerate(model.nodes)
-        }
-        self._ops_element_tags = {
-            str(elem.id): index + 1 for index, elem in enumerate(model.elements)
-        }
-        self._ops_material_tags = {
-            str(mat.id): index + 1 for index, mat in enumerate(model.materials)
-        }
+        self._ops_node_tags = {str(node.id): index + 1 for index, node in enumerate(model.nodes)}
+        self._ops_element_tags = {str(elem.id): index + 1 for index, elem in enumerate(model.elements)}
+        self._ops_material_tags = {str(mat.id): index + 1 for index, mat in enumerate(model.materials)}
 
     def _ops_node_tag(self, node_id: Any) -> int:
         key = str(node_id)
@@ -45,7 +32,7 @@ class OpenSeesStaticAnalyzer(StaticAnalyzer):
             raise ValueError(f"Unknown material id '{material_id}' in OpenSees mapping")
         return self._ops_material_tags[key]
 
-    def _select_opensees_planar_frame_mode(self, parameters: Dict[str, Any]) -> Any:
+    def _select_opensees_planar_frame_mode(self, parameters: Dict[str, Any]):
         return self._select_planar_frame_mode(parameters)
 
 
@@ -59,4 +46,4 @@ def run_analysis(model: StructureModelV1, parameters: Dict[str, Any]) -> Dict[st
     try:
         return executor.run(parameters)
     except Exception as error:
-        raise RuntimeError(f"OpenSees static analysis failed: {error}") from error
+        raise RuntimeError(f"OpenSees analysis failed: {error}") from error

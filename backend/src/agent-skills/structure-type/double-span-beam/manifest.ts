@@ -14,12 +14,11 @@ export const manifest: SkillManifest = {
   triggers: ['double-span', '双跨梁'],
   stages: ['intent', 'draft', 'analysis', 'design'],
   autoLoadByDefault: true,
-  structuralTypeKeys: ['double-span-beam'],
+  scenarioKeys: ['double-span-beam'],
   domain: 'structure-type',
   requires: [],
   conflicts: [],
   capabilities: ['intent-detection', 'draft-extraction', 'interaction-questions', 'model-build', 'report-narrative'],
-  enabledTools: ['draft_model', 'update_model'],
   priority: 90,
   compatibility: {
     minRuntimeVersion: '0.1.0',

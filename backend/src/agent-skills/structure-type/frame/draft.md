@@ -11,44 +11,19 @@ autoLoadByDefault: true
 ---
 # Draft
 
-- 2D 框架固定收集：维度、层数、跨数、各层层高、各跨跨度、各层节点荷载、材料牌号、柱截面、梁截面。
-- 3D 框架固定收集：维度、层数、X/Y 向跨数、各层层高、X/Y 向各跨跨度、各层节点荷载、材料牌号、柱截面、梁截面。
-- **材料和截面为必填项**，与几何参数同等重要，必须在 draftPatch 中提取或询问。
-
-## 材料牌号（frameMaterial）
-- 识别关键词：材料、钢材、牌号、采用、选用，后接 Q355/Q345/Q235/Q390/Q420/S355/A36 等。
-- 示例：`材料Q355` → `"frameMaterial": "Q355"`；`采用Q345钢` → `"frameMaterial": "Q345"`。
-- 默认推荐：Q355（GB 50017 钢框架常用）。
-
-## 截面规格（frameColumnSection / frameBeamSection）
-- 柱截面：识别"柱截面 HW350x350"、"HW350x350 柱"、"column section HW350x350" 等写法。
-- 梁截面：识别"梁截面 HN400x200"、"HN400x200 梁"、"beam section HN400x200" 等写法。
-- 常见柱截面：HW300X300（≤5层）、HW350X350（6-10层）、HW400X400（>10层）。
-- 常见梁截面：HN300X150（≤5层）、HN400X200（6-10层）、HN500X200（>10层）。
-- 截面名称统一用大写 X 分隔（如 HW350X350），输出时保持该格式。
-
-## 不等跨跨度数组
-- 若用户明确给出各跨不同尺寸，应输出完整数组而非标量。
-- 示例：`x向3跨跨度分别6m、9m、6m` → `"bayCountX": 3, "bayWidthsXM": [6, 9, 6]`。
-- 示例：`y向2跨，5m和7m` → `"bayCountY": 2, "bayWidthsYM": [5, 7]`。
-- 若各跨相同：`每跨6m` → `"bayWidthsXM": [6, 6, 6]`（repeat scalar）。
-
-## 荷载提取
+- 2D 框架固定收集：维度、层数、跨数、各层层高、各跨跨度、各层节点荷载。
+- 3D 框架固定收集：维度、层数、X/Y 向跨数、各层层高、X/Y 向各跨跨度、各层节点荷载。
+- 第一版只生成默认钢材、默认柱截面和默认梁截面，便于后续在 JSON 里继续手改。
 - 对 `floorLoads`，优先把自然语言映射为统一楼层荷载数组：
-  - `每层节点荷载都是1000kN` → `floorLoads[].verticalKN = 1000`
-  - `每层竖向荷载1000kN` 或 `每层竖向1000kN` → `floorLoads[].verticalKN = 1000`
-  - `水平荷载500kN` → 2D 框架优先映射为 `floorLoads[].lateralXKN = 500`
-  - `x、y向水平荷载都是500kN` → `lateralXKN = 500` 且 `lateralYKN = 500`
+  - `每层节点荷载都是1000kN` -> `floorLoads[].verticalKN = 1000`
+  - `每层竖向荷载1000kN` -> `floorLoads[].verticalKN = 1000`
+  - `水平荷载500kN` -> 2D 框架优先映射为 `floorLoads[].lateralXKN = 500`
+  - `横向荷载都是500kN` 或 `侧向荷载都是500kN` -> 2D 框架优先映射为 `floorLoads[].lateralXKN = 500`
+  - `x、y向水平荷载都是500kN` 或 `x/y向水平荷载各为500kN` -> `floorLoads[].lateralXKN = 500` 且 `floorLoads[].lateralYKN = 500`
 - 若消息中明确出现 `y向水平荷载`、`x、y向`、`x/y向` 等双向水平荷载语义，应优先输出 `frameDimension = "3d"`。
-
-## 柱脚边界（frameBaseSupportType）
-- 识别：`柱脚固定`、`柱脚固结`、`fixed base` → `"frameBaseSupportType": "fixed"`
-- 识别：`柱脚铰接`、`base pinned` → `"frameBaseSupportType": "pinned"`
-- 默认推荐：fixed。
-
-## 几何规则框架识别
-- `三层` / `3层` → `storyCount = 3`
-- `每层3m` / `层高3m` → `storyHeightsM = [3, 3, 3]`
-- `x方向4跨，间隔3m` → `bayCountX = 4`, `bayWidthsXM = [3, 3, 3, 3]`
-- `y方向3跨间隔也是3m` → `bayCountY = 3`, `bayWidthsYM = [3, 3, 3]`
+- 对规则框架几何，也要优先识别这些自然表达：
+  - `三层` / `3层` -> `storyCount = 3`
+  - `每层3m` / `层高3m` -> `storyHeightsM = [3, 3, 3]`
+  - `x方向4跨，间隔3m` -> `bayCountX = 4`, `bayWidthsXM = [3, 3, 3, 3]`
+  - `y方向3跨间隔也是3m` -> `bayCountY = 3`, `bayWidthsYM = [3, 3, 3]`
 - 如果只能稳定识别统一标量，也应输出最终数组字段，而不是让用户继续手动逐层逐跨补全。

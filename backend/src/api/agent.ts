@@ -22,12 +22,11 @@ const optionalIdSchema = z.preprocess((value) => {
 
 const agentRunSchema = z.object({
   message: z.string().min(1).max(10000),
+  mode: z.enum(['chat', 'execute', 'auto']).optional(),
   conversationId: optionalIdSchema,
   traceId: optionalIdSchema,
   context: z.object({
     skillIds: z.array(z.string()).optional(),
-    enabledToolIds: z.array(z.string()).optional(),
-    disabledToolIds: z.array(z.string()).optional(),
     engineId: z.string().optional(),
     model: z.record(z.any()).optional(),
     modelFormat: z.string().optional(),
@@ -51,19 +50,15 @@ const capabilityMatrixQuerySchema = z.object({
 
 const skillHubDomainSchema = z.enum([
   'structure-type',
-  'analysis',
+  'material-constitutive',
+  'geometry-input',
   'load-boundary',
+  'analysis-strategy',
   'code-check',
-  'data-input',
-  'design',
-  'drawing',
-  'general',
-  'material',
   'result-postprocess',
-  'report-export',
-  'section',
-  'validation',
   'visualization',
+  'report-export',
+  'generic-fallback',
 ] as const);
 
 const skillHubSearchQuerySchema = z.object({
@@ -180,10 +175,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
   }, async (request: FastifyRequest<{ Body: z.infer<typeof agentRunSchema> }>, reply: FastifyReply) => {
     const body = agentRunSchema.parse(request.body);
-    const result = await agentService.run({
-      ...body,
-      userId: request.user?.id,
-    });
+    const result = await agentService.run(body);
     return reply.send(result);
   });
 }

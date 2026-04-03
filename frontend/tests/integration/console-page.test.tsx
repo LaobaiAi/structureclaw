@@ -3,24 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import ConsolePage from '../../src/app/(console)/console/page'
 import type { VisualizationSnapshot } from '../../src/components/visualization'
-import { CAPABILITY_PREFERENCE_STORAGE_KEY } from '@/lib/capability-preference'
-import { clearLocaleCookie, LOCALE_STORAGE_KEY, normalizeLocale } from '@/lib/locale-preference'
-import { AppStoreProvider } from '@/lib/stores/context'
-import type { AppLocale } from '@/lib/stores/slices/preferences'
 
 const mockSkills = [
-  {
-    id: 'generic',
-    name: { en: 'Generic Structure Type', zh: '通用结构类型' },
-    description: { en: 'Generic structure workflow', zh: '通用结构工作流' },
-    autoLoadByDefault: true,
-  },
-  {
-    id: 'opensees-static',
-    name: { en: 'OpenSees Static Analysis', zh: 'OpenSees 静力分析' },
-    description: { en: 'OpenSees static workflow', zh: 'OpenSees 静力分析工作流' },
-    autoLoadByDefault: true,
-  },
   {
     id: 'beam',
     name: { en: 'Beam Helper', zh: '梁助手' },
@@ -169,30 +153,17 @@ function mockConsoleSupportRequest(url: string) {
       ok: true,
       json: vi.fn().mockResolvedValue({
         skills: [
-          { id: 'generic', domain: 'structure-type' },
-          { id: 'opensees-static', domain: 'analysis' },
           { id: 'beam', domain: 'structure-type' },
           { id: 'frame', domain: 'structure-type' },
           { id: 'code-check-gb50017', domain: 'code-check' },
         ],
-        tools: [
-          { id: 'draft_model', category: 'modeling' },
-          { id: 'update_model', category: 'modeling' },
-          { id: 'validate_model', category: 'modeling' },
-          { id: 'run_analysis', category: 'analysis' },
-          { id: 'run_code_check', category: 'checking' },
-          { id: 'generate_report', category: 'reporting' },
-        ],
         skillDomainById: {
-          generic: 'structure-type',
-          'opensees-static': 'analysis',
           beam: 'structure-type',
           frame: 'structure-type',
           'code-check-gb50017': 'code-check',
         },
         domainSummaries: [
-          { domain: 'structure-type', skillIds: ['generic', 'beam', 'frame'] },
-          { domain: 'analysis', skillIds: ['opensees-static'] },
+          { domain: 'structure-type', skillIds: ['beam', 'frame'] },
           { domain: 'code-check', skillIds: ['code-check-gb50017'] },
         ],
       }),
@@ -240,30 +211,17 @@ describe('ConsolePage Integration (CONS-13)', () => {
           ok: true,
           json: vi.fn().mockResolvedValue({
             skills: [
-              { id: 'generic', domain: 'structure-type' },
-              { id: 'opensees-static', domain: 'analysis' },
               { id: 'beam', domain: 'structure-type' },
               { id: 'frame', domain: 'structure-type' },
               { id: 'code-check-gb50017', domain: 'code-check' },
             ],
-            tools: [
-              { id: 'draft_model', category: 'modeling' },
-              { id: 'update_model', category: 'modeling' },
-              { id: 'validate_model', category: 'modeling' },
-              { id: 'run_analysis', category: 'analysis' },
-              { id: 'run_code_check', category: 'checking' },
-              { id: 'generate_report', category: 'reporting' },
-            ],
             skillDomainById: {
-              generic: 'structure-type',
-              'opensees-static': 'analysis',
               beam: 'structure-type',
               frame: 'structure-type',
               'code-check-gb50017': 'code-check',
             },
             domainSummaries: [
-              { domain: 'structure-type', skillIds: ['generic', 'beam', 'frame'] },
-              { domain: 'analysis', skillIds: ['opensees-static'] },
+              { domain: 'structure-type', skillIds: ['beam', 'frame'] },
               { domain: 'code-check', skillIds: ['code-check-gb50017'] },
             ],
           }),
@@ -297,7 +255,6 @@ describe('ConsolePage Integration (CONS-13)', () => {
       } as unknown as Response
     })
     window.localStorage.clear()
-    clearLocaleCookie()
     Element.prototype.scrollIntoView = vi.fn()
   })
 
@@ -307,13 +264,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
   })
 
   async function renderConsolePage() {
-    const stored = normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY))
-    const initialLocale: AppLocale = stored ?? 'en'
-    const view = render(
-      <AppStoreProvider initialState={{ locale: initialLocale }}>
-        <ConsolePage />
-      </AppStoreProvider>,
-    )
+    const view = render(<ConsolePage />)
     await waitFor(() => {
       expect(
         vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/v1/chat/conversations')),
@@ -322,14 +273,12 @@ describe('ConsolePage Integration (CONS-13)', () => {
     return view
   }
 
-  function setCapabilityPreferences(skillIds: string[], toolIds: string[] = ['draft_model', 'update_model', 'validate_model', 'run_analysis', 'run_code_check', 'generate_report']) {
-    window.localStorage.setItem(
-      CAPABILITY_PREFERENCE_STORAGE_KEY,
-      JSON.stringify({
-        skillIds,
-        toolIds,
-      })
-    )
+  async function selectSkill(name: RegExp | string) {
+    fireEvent.click(screen.getByRole('button', { name: /Expand Skills|展开技能/ }))
+    if (!screen.queryByRole('button', { name })) {
+      fireEvent.change(screen.getByLabelText(/Category View|分类视图/), { target: { value: 'unknown' } })
+    }
+    fireEvent.click(await screen.findByRole('button', { name }))
   }
 
   it('renders the active AI console shell', async () => {
@@ -344,11 +293,12 @@ describe('ConsolePage Integration (CONS-13)', () => {
     await renderConsolePage()
 
     expect(screen.getByPlaceholderText(/Describe your structural goal/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Manage Capabilities' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Expand Skills' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Expand Engineering Context' })).toBeInTheDocument()
     expect(screen.getByText('Database tools')).toBeInTheDocument()
     expect(screen.getByText(/Review SQLite file health/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Discuss First' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run Analysis' })).toBeInTheDocument()
     expect(screen.queryByText('Analysis Engine Auto')).not.toBeInTheDocument()
   })
 
@@ -377,21 +327,33 @@ describe('ConsolePage Integration (CONS-13)', () => {
     expect(screen.getAllByRole('button', { name: 'Expand Engineering Context' })).toHaveLength(1)
   })
 
-  it('shows a compact capability summary and a link to the settings page', async () => {
+  it('keeps loaded skills collapsed by default and toggles the list', async () => {
     await renderConsolePage()
 
-    expect(screen.getByText('Current capabilities')).toBeInTheDocument()
-    expect(screen.getByText('Capability selection moved into a dedicated settings page so the chat workspace stays focused on conversation and results.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Manage Capabilities' })).toHaveAttribute('href', '/console/capabilities')
+    expect(screen.queryByText('Selected skills 2')).not.toBeInTheDocument()
     expect(screen.queryByText('Beam Helper')).not.toBeInTheDocument()
     expect(screen.queryByText('Frame Checker')).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose which local Markdown skills the agent may use. If no skills are selected, the console falls back to direct LLM conversation.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Skills' }))
+
+    expect(screen.getByRole('button', { name: 'Collapse Skills' })).toBeInTheDocument()
+    expect(screen.getByText('Choose which local Markdown skills the agent may use. If no skills are selected, the console falls back to direct LLM conversation.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Skills' }))
+
+    expect(screen.getByRole('button', { name: 'Expand Skills' })).toBeInTheDocument()
+    expect(screen.queryByText('Choose which local Markdown skills the agent may use. If no skills are selected, the console falls back to direct LLM conversation.')).not.toBeInTheDocument()
   })
 
-  it('removes the old in-page skill picker from the console surface', async () => {
+  it('hides composer help in the default collapsed state', async () => {
     await renderConsolePage()
 
-    expect(screen.queryByRole('button', { name: /Expand Skills|展开技能/ })).not.toBeInTheDocument()
-    expect(screen.queryByText('Choose which built-in skills the model may use for engineering understanding and guidance. Checked skills stay in the callable list; unchecked skills are excluded.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose which local Markdown skills the agent may use. If no skills are selected, the console falls back to direct LLM conversation.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand Skills|展开技能/ }))
+
+    expect(screen.getByText('Choose which local Markdown skills the agent may use. If no skills are selected, the console falls back to direct LLM conversation.')).toBeInTheDocument()
   })
 
   it('keeps only the model section inside the engineering context panel', async () => {
@@ -576,7 +538,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
     await waitFor(() => {
       expect(screen.getByText('backend assistant')).toBeInTheDocument()
     })
-    expect(within(screen.getByTestId('console-chat-panel')).queryByText('welcome')).not.toBeInTheDocument()
+    expect(screen.queryByText('welcome')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Expand Engineering Context|展开工程上下文/ }))
 
@@ -878,21 +840,17 @@ describe('ConsolePage Integration (CONS-13)', () => {
 
     const input = screen.getByPlaceholderText(/Describe your structural goal|描述你的结构目标/) as HTMLTextAreaElement
     fireEvent.change(input, { target: { value: 'New round message' } })
-    fireEvent.click(screen.getByRole('button', { name: /Send|发送/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Discuss First|先聊需求/ }))
 
     await waitFor(() => {
       expect(screen.getByText('New reply')).toBeInTheDocument()
     })
 
-    // Bump to top runs in handleSubmit's `finally` after stream handling; DOM order can lag behind
-    // the assistant message update on slower runners (e.g. windows-latest CI).
-    await waitFor(() => {
-      const titleButtons = screen.getAllByRole('button').filter((button) => (
-        button.textContent?.includes('Top round conversation') || button.textContent?.includes('Round conversation')
-      ))
-      expect(titleButtons[0]?.textContent ?? '').toMatch(/Round conversation/)
-      expect(titleButtons[1]?.textContent ?? '').toMatch(/Top round conversation/)
-    }, { timeout: 8000 })
+    const titleButtons = screen.getAllByRole('button').filter((button) => (
+      button.textContent?.includes('Top round conversation') || button.textContent?.includes('Round conversation')
+    ))
+    expect(titleButtons[0]).toHaveTextContent('Round conversation')
+    expect(titleButtons[1]).toHaveTextContent('Top round conversation')
   })
 
   it('deletes a non-active conversation from history and local archive', async () => {
@@ -1084,17 +1042,17 @@ describe('ConsolePage Integration (CONS-13)', () => {
   })
 
   it('renders Chinese console copy when locale is set to zh', async () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'zh')
+    window.localStorage.setItem('structureclaw.locale', 'zh')
 
-    await renderConsolePage()
+    render(<ConsolePage />)
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: '结构工程对话工作台' })).toBeInTheDocument()
     })
 
     expect(screen.getByText('历史会话')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '管理能力' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '执行分析' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '展开技能' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '展开工程上下文' })).toBeInTheDocument()
     expect(screen.queryByText('计算引擎 自动选择')).not.toBeInTheDocument()
     expect(screen.queryByText('已选择技能')).not.toBeInTheDocument()
@@ -1102,7 +1060,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
   })
 
   it('sends the active locale with execute requests', async () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'zh')
+    window.localStorage.setItem('structureclaw.locale', 'zh')
 
     let executePayload: Record<string, unknown> | null = null
     vi.mocked(fetch).mockImplementation(async (input, init) => {
@@ -1128,28 +1086,26 @@ describe('ConsolePage Integration (CONS-13)', () => {
           json: vi.fn().mockResolvedValue({
             id: 'conv-zh',
             title: '新会话',
-            type: 'general',
+            type: 'analysis',
             createdAt: '2026-03-12T08:00:00.000Z',
             updatedAt: '2026-03-12T08:00:00.000Z',
           }),
         } as unknown as Response
       }
 
-      if (url.includes('/api/v1/chat/stream')) {
+      if (url.includes('/api/v1/chat/execute')) {
         executePayload = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
-        return createSseResponse([
-          {
-            type: 'result',
-            content: {
-              response: '已完成',
-              success: true,
-              report: {
-                summary: '摘要',
-                markdown: '# 报告',
-              },
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            response: '已完成',
+            success: true,
+            report: {
+              summary: '摘要',
+              markdown: '# 报告',
             },
-          },
-        ])
+          }),
+        } as unknown as Response
       }
 
       if (url.includes('/api/v1/agent/capability-matrix')) {
@@ -1187,13 +1143,13 @@ describe('ConsolePage Integration (CONS-13)', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
-    setCapabilityPreferences(['generic', 'beam', 'opensees-static'])
     await renderConsolePage()
+    await selectSkill(/梁助手|Beam Helper/)
 
     fireEvent.change(screen.getByPlaceholderText(/描述你的结构目标/i), {
       target: { value: '请分析这个模型' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.click(screen.getByRole('button', { name: '执行分析' }))
 
     await waitFor(() => {
       expect(executePayload).not.toBeNull()
@@ -1261,52 +1217,50 @@ describe('ConsolePage Integration (CONS-13)', () => {
           json: vi.fn().mockResolvedValue({
             id: 'conv-engine',
             title: 'Engine visibility',
-            type: 'general',
+            type: 'analysis',
             createdAt: '2026-03-12T08:00:00.000Z',
             updatedAt: '2026-03-12T08:00:00.000Z',
           }),
         } as unknown as Response
       }
 
-      if (url.includes('/api/v1/chat/stream')) {
-        return createSseResponse([
-          {
-            type: 'result',
-            content: {
-              response: 'Analysis finished.',
+      if (url.includes('/api/v1/chat/execute')) {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            response: 'Analysis finished.',
+            success: true,
+            requestedEngineId: 'builtin-opensees',
+            analysis: {
               success: true,
-              requestedEngineId: 'builtin-opensees',
-              analysis: {
-                success: true,
-                meta: {
-                  engineId: 'builtin-simplified',
-                  engineName: 'StructureClaw Analysis Engine',
-                  engineVersion: '0.1.0',
-                  engineKind: 'python',
-                  selectionMode: 'fallback',
-                  fallbackFrom: 'builtin-opensees',
-                  unavailableReason: 'OpenSees runtime is unavailable',
-                },
-                data: {
-                  summary: {
-                    nodeCount: 2,
-                  },
+              meta: {
+                engineId: 'builtin-simplified',
+                engineName: 'StructureClaw Analysis Engine',
+                engineVersion: '0.1.0',
+                engineKind: 'python',
+                selectionMode: 'fallback',
+                fallbackFrom: 'builtin-opensees',
+                unavailableReason: 'OpenSees runtime is unavailable',
+              },
+              data: {
+                summary: {
+                  nodeCount: 2,
                 },
               },
             },
-          },
-        ])
+          }),
+        } as unknown as Response
       }
 
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
-    setCapabilityPreferences(['generic', 'beam', 'opensees-static'])
     await renderConsolePage()
+    await selectSkill(/Beam Helper|梁助手/)
     fireEvent.change(screen.getByPlaceholderText(/Describe your structural goal|描述你的结构目标/), {
       target: { value: 'Analyze this model' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /Send|发送/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Run Analysis|执行分析/ }))
 
     await waitFor(() => {
       expect(screen.getByText('StructureClaw Analysis Engine v0.1.0')).toBeInTheDocument()
@@ -1327,18 +1281,19 @@ describe('ConsolePage Integration (CONS-13)', () => {
   })
 
   it('renders guided discuss-first state in English', async () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    window.localStorage.setItem('structureclaw.locale', 'en')
     let streamPayload: Record<string, unknown> | null = null
     const interaction = {
-      detectedStructuralType: 'unknown',
-      interactionStageLabel: 'Intent',
-      missingCritical: ['Structural system / topology description (any type, or provide computable model JSON directly)'],
+      detectedScenario: 'steel-frame',
+      detectedScenarioLabel: 'Steel Frame',
+      conversationStage: 'Intent',
+      missingCritical: ['Structure type (portal frame / double-span beam / beam / truss)'],
       missingOptional: ['Whether to generate a report'],
-      fallbackSupportNote: 'Continue with the generic structure skill and keep collecting key engineering parameters.',
-      recommendedNextStep: 'Fill in the structural system first.',
-      questions: [{ question: 'Please first describe the structural system, member connectivity, and main loads.' }],
+      fallbackSupportNote: '“Steel frame” has been narrowed to the portal-frame template for now.',
+      recommendedNextStep: 'Fill in Structure type first.',
+      questions: [{ question: 'Please confirm the structure type (portal frame / double-span beam / beam / truss).' }],
       pending: {
-        criticalMissing: ['Structural system / topology description (any type, or provide computable model JSON directly)'],
+        criticalMissing: ['Structure type (portal frame / double-span beam / beam / truss)'],
         nonCriticalMissing: ['Whether to generate a report'],
       },
     }
@@ -1366,7 +1321,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
           json: vi.fn().mockResolvedValue({
             id: 'conv-guidance',
             title: 'Guided conversation',
-            type: 'general',
+            type: 'analysis',
           }),
         } as unknown as Response
       }
@@ -1375,7 +1330,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
         streamPayload = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
         return createSseResponse([
           { type: 'interaction_update', content: interaction },
-          { type: 'result', content: { response: 'Using the generic structure skill to continue collecting parameters.', success: true, interaction } },
+          { type: 'result', content: { response: 'Detected scenario: Steel Frame', success: true, interaction } },
         ])
       }
 
@@ -1387,7 +1342,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Help me size a steel frame' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss First' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('console-guidance-panel')).toBeInTheDocument()
@@ -1397,12 +1352,12 @@ describe('ConsolePage Integration (CONS-13)', () => {
       ?? null) as Record<string, unknown> | null
     expect(streamContext?.locale).toBe('en')
     expect(screen.getByText('Conversation Guidance')).toBeInTheDocument()
-    expect(screen.getByText('Continue with the generic structure skill and keep collecting key engineering parameters.')).toBeInTheDocument()
-    expect(screen.getByText('Fill in the structural system first.')).toBeInTheDocument()
+    expect(screen.getByText('Steel Frame')).toBeInTheDocument()
+    expect(screen.getByText('Fill in Structure type first.')).toBeInTheDocument()
   })
 
   it('synchronizes model json from a collecting chat result once the structural model is complete', async () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    window.localStorage.setItem('structureclaw.locale', 'en')
     const synchronizedModel = {
       schema_version: '1.0.0',
       nodes: [
@@ -1439,7 +1394,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
           json: vi.fn().mockResolvedValue({
             id: 'conv-sync-model',
             title: 'Sync model',
-            type: 'general',
+            type: 'analysis',
           }),
         } as unknown as Response
       }
@@ -1472,33 +1427,31 @@ describe('ConsolePage Integration (CONS-13)', () => {
     fireEvent.change(screen.getByPlaceholderText(/Describe your structural goal|描述你的结构目标/), {
       target: { value: 'Please draft a beam model' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss First' }))
 
     await waitFor(() => {
-      expect((modelInput as HTMLTextAreaElement).value).toContain('"schema_version": "1.0.0"')
+      expect(screen.getByText('Model JSON was synchronized from the conversation draft.')).toBeInTheDocument()
     })
 
+    expect((modelInput as HTMLTextAreaElement).value).toContain('"schema_version": "1.0.0"')
     expect((modelInput as HTMLTextAreaElement).value).toContain('"nodes"')
     expect(screen.queryByText(/Model JSON parse failed|模型 JSON 解析失败/)).not.toBeInTheDocument()
-    // latestModelVisualizationSnapshot is derived in a useEffect after modelText updates; avoid racing the DOM on CI.
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Preview Model|预览模型/ })).toBeEnabled()
-    })
-    expect(screen.queryByText(/Current result is missing a model snapshot|当前结果缺少模型快照/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Preview Model|预览模型/ })).toBeEnabled()
   })
 
   it('renders guided discuss-first state in Chinese', async () => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'zh')
+    window.localStorage.setItem('structureclaw.locale', 'zh')
     const interaction = {
-      detectedStructuralType: 'unknown',
-      interactionStageLabel: '需求识别',
-      missingCritical: ['结构体系/构件拓扑描述（不限类型，可直接给结构模型JSON）'],
+      detectedScenario: 'bridge',
+      detectedScenarioLabel: '桥梁',
+      conversationStage: '需求识别',
+      missingCritical: ['结构类型（门式刚架/双跨梁/梁/平面桁架）'],
       missingOptional: ['是否生成报告'],
-      fallbackSupportNote: '继续使用通用结构类型 skill 处理当前对话，并继续补齐关键工程参数。',
-      recommendedNextStep: '先补齐结构体系。',
-      questions: [{ question: '请先描述结构体系、构件连接关系和主要荷载；如果你已经有可计算结构模型，也可以直接贴 JSON。' }],
+      fallbackSupportNote: '当前补参链路还不直接支持桥梁专用模板；若你只想先讨论单梁主梁近似，可收敛到梁模板。',
+      recommendedNextStep: '先补齐结构类型。',
+      questions: [{ question: '请确认结构类型（门式刚架/双跨梁/梁/平面桁架）。' }],
       pending: {
-        criticalMissing: ['结构体系/构件拓扑描述（不限类型，可直接给结构模型JSON）'],
+        criticalMissing: ['结构类型（门式刚架/双跨梁/梁/平面桁架）'],
         nonCriticalMissing: ['是否生成报告'],
       },
     }
@@ -1526,7 +1479,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
           json: vi.fn().mockResolvedValue({
             id: 'conv-guidance-zh',
             title: '引导对话',
-            type: 'general',
+            type: 'analysis',
           }),
         } as unknown as Response
       }
@@ -1534,7 +1487,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
       if (url.includes('/api/v1/chat/stream')) {
         return createSseResponse([
           { type: 'interaction_update', content: interaction },
-          { type: 'result', content: { response: '继续使用通用结构类型 skill 处理当前对话。', success: true, interaction } },
+          { type: 'result', content: { response: '识别场景：桥梁', success: true, interaction } },
         ])
       }
 
@@ -1546,15 +1499,15 @@ describe('ConsolePage Integration (CONS-13)', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: '请帮我梳理桥梁参数' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.click(screen.getByRole('button', { name: '先聊需求' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('console-guidance-panel')).toBeInTheDocument()
     })
 
     expect(screen.getByText('对话引导')).toBeInTheDocument()
-    expect(screen.getAllByText('继续使用通用结构类型 skill 处理当前对话。').length).toBeGreaterThan(0)
-    expect(screen.getByText('先补齐结构体系。')).toBeInTheDocument()
+    expect(screen.getByText('桥梁')).toBeInTheDocument()
+    expect(screen.getByText('先补齐结构类型。')).toBeInTheDocument()
   })
 
   it('opens the structural visualization modal after a successful execute run with model JSON', async () => {
@@ -1588,25 +1541,23 @@ describe('ConsolePage Integration (CONS-13)', () => {
           json: vi.fn().mockResolvedValue({
             id: 'conv-visual',
             title: 'Visualization run',
-            type: 'general',
+            type: 'analysis',
           }),
         } as unknown as Response
       }
 
-      if (url.includes('/api/v1/chat/stream')) {
-        return createSseResponse([
-          {
-            type: 'result',
-            content: sampleAnalysisResult,
-          },
-        ])
+      if (url.includes('/api/v1/chat/execute')) {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue(sampleAnalysisResult),
+        } as unknown as Response
       }
 
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
-    setCapabilityPreferences(['generic', 'beam', 'opensees-static'])
     await renderConsolePage()
+    await selectSkill(/Beam Helper|梁助手/)
 
     fireEvent.click(screen.getByRole('button', { name: /Expand Engineering Context|展开工程上下文/ }))
     fireEvent.change(screen.getByPlaceholderText(/Paste StructureModel v1 JSON here|将 StructureModel v1 JSON 粘贴到这里/), {
@@ -1615,7 +1566,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
     fireEvent.change(screen.getByPlaceholderText(/Describe your structural goal|描述你的结构目标/), {
       target: { value: 'Analyze and visualize this beam' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /Send|发送/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Run Analysis|执行分析/ }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Open Visualization|打开可视化/ })).toBeEnabled()
@@ -1677,21 +1628,22 @@ describe('ConsolePage Integration (CONS-13)', () => {
         } as unknown as Response
       }
 
-      if (url.includes('/api/v1/chat/stream')) {
+      if (url.includes('/api/v1/chat/execute')) {
         executeBodies.push(JSON.parse(String(init?.body || '{}')) as Record<string, unknown>)
-        return createSseResponse([
-          {
-            type: 'result',
-            content: sampleAnalysisResult,
-          },
-        ])
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue(sampleAnalysisResult),
+        } as unknown as Response
       }
 
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
-    setCapabilityPreferences(['generic', 'opensees-static', 'code-check-gb50017'])
     await renderConsolePage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand Skills|展开技能/ }))
+    fireEvent.change(screen.getByLabelText(/Category View|分类视图/), { target: { value: 'code-check' } })
+    fireEvent.click(screen.getByRole('button', { name: /Code Check GB50017|规范校核 GB50017/ }))
     fireEvent.click(screen.getByRole('button', { name: /Expand Engineering Context|展开工程上下文/ }))
     fireEvent.change(screen.getByPlaceholderText(/Paste StructureModel v1 JSON here|将 StructureModel v1 JSON 粘贴到这里/), {
       target: { value: sampleModelJson },
@@ -1699,7 +1651,7 @@ describe('ConsolePage Integration (CONS-13)', () => {
     fireEvent.change(screen.getByPlaceholderText(/Describe your structural goal|描述你的结构目标/), {
       target: { value: 'Analyze this model with code checks' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /Send|发送/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Run Analysis|执行分析/ }))
 
     await waitFor(() => {
       expect(executeBodies.length).toBeGreaterThan(0)
@@ -1748,21 +1700,19 @@ describe('ConsolePage Integration (CONS-13)', () => {
         } as unknown as Response
       }
 
-      if (url.includes('/api/v1/chat/stream')) {
+      if (url.includes('/api/v1/chat/execute')) {
         executeBodies.push(JSON.parse(String(init?.body || '{}')) as Record<string, unknown>)
-        return createSseResponse([
-          {
-            type: 'result',
-            content: sampleAnalysisResult,
-          },
-        ])
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue(sampleAnalysisResult),
+        } as unknown as Response
       }
 
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
-    setCapabilityPreferences(['generic', 'beam', 'opensees-static'])
     await renderConsolePage()
+    await selectSkill(/Beam Helper|梁助手/)
 
     fireEvent.click(screen.getByRole('button', { name: /Expand Engineering Context|展开工程上下文/ }))
     fireEvent.change(screen.getByPlaceholderText(/Paste StructureModel v1 JSON here|将 StructureModel v1 JSON 粘贴到这里/), {
@@ -1771,14 +1721,14 @@ describe('ConsolePage Integration (CONS-13)', () => {
     fireEvent.change(screen.getByPlaceholderText(/Describe your structural goal|描述你的结构目标/), {
       target: { value: 'Analyze this model only' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /Send|发送/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Run Analysis|执行分析/ }))
 
     await waitFor(() => {
       expect(executeBodies.length).toBeGreaterThan(0)
     })
 
     const context = (executeBodies[0].context || {}) as Record<string, unknown>
-    expect(context.autoCodeCheck).toBeUndefined()
+    expect(context.autoCodeCheck).toBe(false)
     expect(Array.isArray(context.skillIds) ? context.skillIds : []).not.toContain('code-check-gb50017')
   })
 

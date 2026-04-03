@@ -1,7 +1,4 @@
 import '@testing-library/jest-dom'
-import { configure } from '@testing-library/react'
-
-configure({ asyncUtilTimeout: 10_000 })
 
 // Polyfills for Radix UI components in jsdom
 // jsdom doesn't implement these DOM APIs that Radix UI uses
