@@ -71,9 +71,10 @@ DENSITY_TO_LOAD = GRAVITY
 # mm² 到 m² 的换算系数
 MM2_TO_M2 = 1e-6
 
-# 完整的线荷载换算系数：密度 × g × 面积 / 1000
-# 结果单位：kN/m
-LINEAR_LOAD_CONVERSION = DENSITY_TO_LOAD * MM2_TO_M2
+# 完整的线荷载换算系数：密度 × g × 面积
+# 单位换算：kg/m³ × (N/kg) × mm² → kN/m
+# = kg/m³ × 0.00981 kN/kg × 1e-6 m² = 9.80665e-9
+LINEAR_LOAD_CONVERSION = 9.80665e-9
 
 
 # ============================================================================
