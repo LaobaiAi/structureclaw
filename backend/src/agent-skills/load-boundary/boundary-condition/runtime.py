@@ -610,7 +610,6 @@ def apply_boundary_conditions(model: StructureModelV2, parameters: Dict[str, Any
         if member_ids and all(m in elements_dict and elements_dict[m].type == "column"
                            for m in member_ids):
             generator.apply_column_effective_lengths(member_ids)
-            generator.apply_column_effective_lengths(member_ids)
         else:
             generator.calculate_effective_lengths(member_ids)
 
