@@ -333,7 +333,9 @@ class ForceDistributor:
         """
         估算构件抗侧刚度
 
-        对于柱: k = 12EI/L³
+        对于柱:
+        - 两端固定: k = 12EI/L³
+        - 一端固定一端铰接: k = 3EI/L³
         对于梁: k = 6EI/L²
 
         Args:
@@ -359,8 +361,9 @@ class ForceDistributor:
 
         # 估算刚度
         if element.type == "column":
-            # 柱: k = 12EI/L³
-            stiffness = 12.0 * E * inertia / (length ** 3)
+            # 根据端部约束条件确定柱的刚度系数
+            stiffness_coefficient = self._get_column_stiffness_coefficient(element, direction)
+            stiffness = stiffness_coefficient * E * inertia / (length ** 3)
         elif element.type == "beam":
             # 梁: k = 6EI/L²
             stiffness = 6.0 * E * inertia / (length ** 2)
@@ -369,6 +372,89 @@ class ForceDistributor:
             stiffness = DEFAULT_STIFFNESS
 
         return max(stiffness, 1.0)
+
+    def _get_column_stiffness_coefficient(self, element: Any, direction: str) -> float:
+        """
+        根据柱端部约束条件确定刚度系数
+
+        Args:
+            element: 柱构件
+            direction: 地震方向
+
+        Returns:
+            刚度系数: 12.0 (两端固定), 3.0 (一端固定一端铰接), 6.0 (默认)
+        """
+        # 获取构件两端节点
+        try:
+            # 假设 element 有 nodes 属性或 node_i, node_j 属性
+            node_i = getattr(element, 'node_i', None)
+            node_j = getattr(element, 'node_j', None)
+
+            if not node_i or not node_j:
+                # 无法获取节点信息，使用默认值（两端固定）
+                return 12.0
+
+            # 检查两端节点的转动约束
+            # V2 Schema: restraints = [ux, uy, uz, rx, ry, rz]
+            # rx, ry, rz 对应索引 3, 4, 5
+            i_fixed = self._is_node_rotation_fixed(node_i, direction)
+            j_fixed = self._is_node_rotation_fixed(node_j, direction)
+
+            if i_fixed and j_fixed:
+                # 两端固定: k = 12EI/L³
+                return 12.0
+            elif i_fixed or j_fixed:
+                # 一端固定一端铰接: k = 3EI/L³
+                return 3.0
+            else:
+                # 两端铰接: 这种情况下柱不能抵抗侧向力，使用较小值
+                logger.warning(
+                    f"柱 {element.id} 两端均为铰接，抗侧刚度极低，可能导致不稳定"
+                )
+                return 1.0
+
+        except Exception as e:
+            logger.warning(f"无法确定柱 {element.id} 的端部约束: {e}，使用默认值")
+            # 无法确定约束条件，使用保守估计（介于固定和铰接之间）
+            return 6.0
+
+    def _is_node_rotation_fixed(self, node: Any, direction: str) -> bool:
+        """
+        检查节点在指定方向的转动是否被约束
+
+        Args:
+            node: 节点对象
+            direction: 地震方向 ('x', 'y')
+
+        Returns:
+            True if rotation is fixed, False otherwise
+        """
+        try:
+            # V2 Schema: restraints = [ux, uy, uz, rx, ry, rz]
+            if hasattr(node, 'restraints') and node.restraints:
+                restraints = node.restraints
+                if len(restraints) >= 6:
+                    if direction in ['x', '-x']:
+                        # X方向地震，检查绕Y轴转动 (ry, 索引4)
+                        return restraints[4]
+                    elif direction in ['y', '-y']:
+                        # Y方向地震，检查绕X轴转动 (rx, 索引3)
+                        return restraints[3]
+
+            # 检查节点是否有约束类型信息
+            if hasattr(node, 'extra') and node.extra:
+                constraint_type = node.extra.get('constraintType', '')
+                if constraint_type == 'fixed':
+                    return True
+                elif constraint_type == 'pinned':
+                    return False
+
+            # 默认假设固定
+            return True
+
+        except Exception as e:
+            logger.warning(f"检查节点转动约束时出错: {e}，默认为固定")
+            return True
 
     def _get_section_inertia(self, section: Any, direction: str) -> float:
         """

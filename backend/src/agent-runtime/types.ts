@@ -433,9 +433,9 @@ export class StiffnessMatrixUtils {
 export const ConstraintPresets = {
   /**
    * 固定约束 - 所有自由度完全固定
-   * @param largeNumber 刚性刚度值（默认1e20）
+   * @param largeNumber 刚性刚度值（默认1e15，避免数值不稳定）
    */
-  FIXED: (largeNumber: number = 1e20): Matrix6x6Array => [
+  FIXED: (largeNumber: number = 1e15): Matrix6x6Array => [
     [largeNumber, 0, 0, 0, 0, 0],
     [0, largeNumber, 0, 0, 0, 0],
     [0, 0, largeNumber, 0, 0, 0],
