@@ -192,9 +192,6 @@ class LiveLoadGenerator(LoadGeneratorBase):
             return load_action
 
         section = self._get_section(element.section)
-        if not section:
-            pass
-
         tributary_width, width_source = self._calculate_tributary_width(element)
 
         linear_load = load_value * tributary_width

@@ -22,6 +22,8 @@ class TemperatureLoadGenerator:
         self.load_actions = []
         self._material_map = {m.id: m for m in model.materials}
         self._section_map = {s.id: s for s in model.sections}
+        # 创建节点映射，用于计算构件方向
+        self._node_map = {n.id: n for n in model.nodes}
 
     def generate_thermal_loads(
         self,
@@ -112,7 +114,7 @@ class TemperatureLoadGenerator:
         axial_force_kn = axial_force_n / 1000.0
 
         # 计算构件轴向方向向量
-        load_direction = GH.calculate_element_direction_vector(element, self.model)
+        load_direction = self._calculate_element_direction_vector(element)
         if load_direction is None:
             # 如果无法计算方向，默认使用X方向
             load_direction = {"x": 1.0, "y": 0.0, "z": 0.0}
@@ -168,3 +170,61 @@ class TemperatureLoadGenerator:
             return float(props["area"])
 
         return None
+
+    def _calculate_element_direction_vector(self, element: ElementV2) -> Optional[Dict[str, float]]:
+        """
+        计算构件轴向方向向量
+
+        Args:
+            element: 构件对象
+
+        Returns:
+            单位方向向量 {"x": dx, "y": dy, "z": dz}，如果无法计算则返回 None
+        """
+        if not hasattr(element, 'nodes') or len(element.nodes) < 2:
+            logger.warning(f"Element '{getattr(element, 'id', 'unknown')}' has invalid nodes")
+            return None
+
+        # 获取两端节点
+        node_i = self._node_map.get(element.nodes[0])
+        node_j = self._node_map.get(element.nodes[1])
+
+        if not node_i or not node_j:
+            logger.warning(
+                f"Cannot find nodes for element '{getattr(element, 'id', 'unknown')}': "
+                f"{element.nodes[0]}, {element.nodes[1]}"
+            )
+            return None
+
+        # 获取节点坐标
+        try:
+            x_i = node_i.x
+            y_i = node_i.y
+            z_i = node_i.z
+
+            x_j = node_j.x
+            y_j = node_j.y
+            z_j = node_j.z
+        except AttributeError:
+            logger.warning(
+                f"Node coordinates missing for element '{getattr(element, 'id', 'unknown')}'"
+            )
+            return None
+
+        # 计算方向向量
+        dx = x_j - x_i
+        dy = y_j - y_i
+        dz = z_j - z_i
+
+        # 归一化为单位向量
+        length = (dx ** 2 + dy ** 2 + dz ** 2) ** 0.5
+        if length == 0:
+            logger.warning(f"Element '{element.id}' has zero length")
+            return None
+
+        return {
+            "x": dx / length,
+            "y": dy / length,
+            "z": dz / length
+        }
+
