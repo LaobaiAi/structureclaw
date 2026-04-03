@@ -1,6 +1,5 @@
 import type {
   LocalizedText,
-  SkillDomain,
   SkillStage,
   SkillCompatibility,
   AgentAnalysisType,

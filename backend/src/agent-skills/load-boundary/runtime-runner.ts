@@ -18,9 +18,6 @@ export class LoadBoundaryRuntimeRunner {
   async invoke(input: LoadBoundaryExecutionInput): Promise<LoadBoundaryExecutionOutput> {
     const { skillId, params } = input;
 
-    const skillPath = path.join(this.skillBasePath, skillId);
-    const runtimePath = path.join(skillPath, 'runtime.py');
-
     // Prepare Python script execution
     // Use sys.stdin to safely read JSON parameters, avoiding shell injection risks
     // Use package bridges (dead_load, live_load, etc.) to handle hyphenated directories
@@ -74,7 +71,7 @@ except Exception as e:
 
       // Handle process completion
       const result = await new Promise<LoadBoundaryExecutionOutput>((resolve, reject) => {
-        pythonProcess.on('close', (code) => {
+        pythonProcess.on('close', (_code) => {
           if (stderr && stderr.length > 0) {
             console.warn(`LoadBoundary runtime warning: ${stderr}`);
           }
