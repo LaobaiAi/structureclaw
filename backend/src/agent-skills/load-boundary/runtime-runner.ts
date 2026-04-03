@@ -1,10 +1,8 @@
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LoadBoundaryExecutionInput, LoadBoundaryExecutionOutput } from './types.js';
 
-const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -18,21 +16,24 @@ export class LoadBoundaryRuntimeRunner {
   }
 
   async invoke(input: LoadBoundaryExecutionInput): Promise<LoadBoundaryExecutionOutput> {
-    const { skillId, action, params } = input;
+    const { skillId, params } = input;
 
     const skillPath = path.join(this.skillBasePath, skillId);
     const runtimePath = path.join(skillPath, 'runtime.py');
 
     // Prepare Python script execution
+    // Use sys.stdin to safely read JSON parameters, avoiding shell injection risks
     const script = `
 import sys
+import json
+
+# Add skill base path to Python path
 sys.path.insert(0, '${this.skillBasePath.replace(/\\/g, '\\\\')}')
 
 try:
-    import json
+    # Read JSON parameters from stdin (safe from injection)
+    params = json.loads(sys.stdin.read())
     from ${skillId.replace(/-/g, '_')}.runtime import execute
-
-    params = json.loads('${JSON.stringify(params).replace(/'/g, "\\'").replace(/\\/g, '\\\\')}')
 
     result = execute(params)
 
@@ -50,27 +51,57 @@ except Exception as e:
 `;
 
     try {
-      const { stdout, stderr } = await execAsync(
-        `"${this.pythonPath}" -c "${script.replace(/"/g, '\\"')}"`,
-        {
-          cwd: this.skillBasePath,
-          timeout: 30000,
-        }
-      );
+      // Use spawn with stdin for safe parameter passing
+      const pythonProcess = spawn(this.pythonPath, ['-c', script], {
+        cwd: this.skillBasePath,
+        timeout: 30000,
+      });
 
-      if (stderr && stderr.length > 0) {
-        console.warn(`LoadBoundary runtime warning: ${stderr}`);
-      }
+      let stdout = '';
+      let stderr = '';
 
-      const output = JSON.parse(stdout.trim());
-      if (output.status === 'error') {
-        throw new Error(output.error || 'Unknown error');
-      }
+      // Collect stdout
+      pythonProcess.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
 
-      return {
-        status: 'success',
-        data: output.data,
-      };
+      // Collect stderr
+      pythonProcess.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      // Handle process completion
+      const result = await new Promise<LoadBoundaryExecutionOutput>((resolve, reject) => {
+        pythonProcess.on('close', (code) => {
+          if (stderr && stderr.length > 0) {
+            console.warn(`LoadBoundary runtime warning: ${stderr}`);
+          }
+
+          try {
+            const output = JSON.parse(stdout.trim());
+            if (output.status === 'error') {
+              reject(new Error(output.error || 'Unknown error'));
+            } else {
+              resolve({
+                status: 'success',
+                data: output.data,
+              });
+            }
+          } catch (parseError) {
+            reject(new Error(`Failed to parse output: ${stdout.trim()}`));
+          }
+        });
+
+        pythonProcess.on('error', (error) => {
+          reject(new Error(`Python process error: ${error.message}`));
+        });
+      });
+
+      // Write JSON parameters to stdin (safe from shell injection)
+      pythonProcess.stdin?.write(JSON.stringify(params));
+      pythonProcess.stdin?.end();
+
+      return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`LoadBoundary runtime execution failed: ${errorMessage}`);
