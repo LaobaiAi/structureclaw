@@ -5,7 +5,16 @@ import type {
   AgentAnalysisType,
   MaterialFamily,
 } from '../../agent-runtime/types.js';
-import type { ScenarioTemplateKey } from '../../agent-runtime/types.js';
+
+// Local type definitions for load-boundary skills
+// These types are specific to load-boundary module and should not
+// depend on agent-runtime types that may be removed or changed
+export type LoadBoundaryScenarioKey = 
+  | 'beam'
+  | 'truss'
+  | 'portal-frame'
+  | 'double-span-beam'
+  | 'frame';
 
 export type LoadBoundarySkillId =
   | 'dead-load'
@@ -37,7 +46,7 @@ export interface LoadBoundarySkillManifest {
   triggers: string[];
   stages: SkillStage[];
   autoLoadByDefault: boolean;
-  scenarioKeys: ScenarioTemplateKey[];
+  scenarioKeys: LoadBoundaryScenarioKey[];
   domain: 'load-boundary';
   version: string;
   requires: string[];
