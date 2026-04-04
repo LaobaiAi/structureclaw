@@ -506,7 +506,7 @@ export const ConstraintPresets = {
    * 滚动约束 - 仅约束部分平动（X方向）
    * @param k 平动刚度值（默认1e6）
    */
-  ROLLER: (k: number = 1e6): Matrix6x6Array => [
+  ROLLER: (k: number = StiffnessConstants.ELASTIC): Matrix6x6Array => [
     [k, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0],
