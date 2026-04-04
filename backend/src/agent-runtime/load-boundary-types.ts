@@ -493,7 +493,7 @@ export const ConstraintPresets = {
    * 铰接约束 - 仅约束平动，转动自由
    * @param k 平动刚度值（默认1e6）
    */
-  HINGE: (k: number = 1e6): Matrix6x6Array => [
+  HINGE: (k: number = StiffnessConstants.ELASTIC): Matrix6x6Array => [
     [k, 0, 0, 0, 0, 0],
     [0, k, 0, 0, 0, 0],
     [0, 0, k, 0, 0, 0],
