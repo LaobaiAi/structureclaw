@@ -414,7 +414,7 @@ class ForceDistributor:
             if i_fixed and j_fixed:
                 # 两端固定: k = 12EI/L³
                 return 12.0
-            elif i_fixed or j_fixed:
+            elif i_fixed != j_fixed:
                 # 一端固定一端铰接: k = 3EI/L³
                 return 3.0
             else:
