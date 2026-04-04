@@ -1,5 +1,8 @@
 import type { AppLocale } from '../services/locale.js';
 
+// 导出荷载与边界条件专用类型
+export * from './load-boundary-types.js';
+
 export type DraftLoadType = 'point' | 'distributed';
 export type DraftLoadPosition = 'end' | 'midspan' | 'full-span' | 'top-nodes' | 'middle-joint' | 'free-joint';
 export type DraftSupportType = 'cantilever' | 'simply-supported' | 'fixed-fixed' | 'fixed-pinned';
