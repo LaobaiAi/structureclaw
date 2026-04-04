@@ -14,7 +14,6 @@ import logging
 from .constants import (
     KG_TO_KN,
     MM2_TO_M2,
-    DEFAULT_TOTAL_WEIGHT,
     DEFAULT_SECTION_AREA
 )
 

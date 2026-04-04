@@ -208,15 +208,13 @@ def get_method_description(method: str, language: str = 'zh') -> str:
             'auto': '自动选择',
             'from_model_direct': '从模型直接获取',
             'from_elements': '从构件计算',
-            'from_floors': '从楼层计算',
-            'default_value': '使用默认值'
+            'from_floors': '从楼层计算'
         },
         'en': {
             'auto': 'Auto Select',
             'from_model_direct': 'From Model Direct',
             'from_elements': 'From Elements',
-            'from_floors': 'From Floors',
-            'default_value': 'Default Value'
+            'from_floors': 'From Floors'
         }
     }
 

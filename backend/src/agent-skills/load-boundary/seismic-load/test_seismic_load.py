@@ -366,7 +366,7 @@ class TestIntegration(unittest.TestCase):
             "design_group": "第三组",
             "damping_ratio": 0.04,
             "seismic_direction": "y",
-            "weight_calculation_method": "default_value",
+            "weight_calculation_method": "auto",
             "force_distribute_method": "evenly",
             "live_load_factor": 0.5
         }
