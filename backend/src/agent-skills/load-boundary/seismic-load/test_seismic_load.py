@@ -113,29 +113,21 @@ class TestBaseShearCalculator(unittest.TestCase):
         self.mock_model.stories = []
         self.mock_model.elements = []
 
-    def test_default_value_weight(self):
-        """测试使用默认重量值"""
-        calculator = BaseShearCalculator(
-            self.mock_model,
-            weight_calculation_method=WeightCalculationMethod.DEFAULT_VALUE
-        )
-
-        result = calculator.calculate_base_shear(
-            intensity=7.0,
-            site_category="II",
-            design_group="第二组",
-            damping_ratio=0.05
-        )
-
-        self.assertAlmostEqual(result["base_shear"], 0.08 * 10000.0, places=2)
-        self.assertAlmostEqual(result["total_weight"], 10000.0, places=2)
-
     def test_damping_adjustment(self):
         """测试阻尼调整系数"""
+        # 使用 FROM_ELEMENTS 方法需要 mock 模型数据
+        mock_model = Mock()
+        mock_model.elements = []
+        mock_model.stories = []
+        mock_model.metadata = {}
+
         calculator = BaseShearCalculator(
-            self.mock_model,
-            weight_calculation_method=WeightCalculationMethod.DEFAULT_VALUE
+            mock_model,
+            weight_calculation_method=WeightCalculationMethod.FROM_ELEMENTS
         )
+
+        # 为测试目的,直接在 calculator 中设置缓存重量
+        calculator._weight_cache = 10000.0
 
         # 阻尼比 0.02
         result1 = calculator.calculate_base_shear(

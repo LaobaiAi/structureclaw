@@ -66,9 +66,21 @@ class LoadGeneratorBase(ABC):
             楼层到构件列表的映射
         """
         elements_by_story = defaultdict(list)
+        undefined_elements = []
+
         for elem in self.model.elements:
-            story_id = elem.story or "undefined"
-            elements_by_story[story_id].append(elem)
+            story_id = getattr(elem, 'story', None)
+            if story_id:
+                elements_by_story[story_id].append(elem)
+            else:
+                undefined_elements.append(elem.id)
+
+        if undefined_elements:
+            logger.warning(
+                f"Found {len(undefined_elements)} element(s) without story assignment: "
+                f"{undefined_elements[:10]}{'...' if len(undefined_elements) > 10 else ''}"
+            )
+
         return dict(elements_by_story)
 
     def _ensure_load_case_exists(

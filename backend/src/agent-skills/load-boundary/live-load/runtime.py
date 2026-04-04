@@ -43,15 +43,12 @@ class LiveLoadGenerator(LoadGeneratorBase):
         self._section_cache: Dict[str, Optional[Any]] = {}
 
     def generate_loads(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        output_mode = parameters.get("output_mode", "linear")
-        generator = LiveLoadGenerator(self.model, output_mode=output_mode)
-
         case_id = parameters.get("case_id", "LC_LL")
         case_name = parameters.get("case_name", "活载工况")
         description = parameters.get("description", "楼面活载")
         floor_load_type = parameters.get("floor_load_type", "office")
 
-        generator.generate_floor_live_loads(
+        self.generate_floor_live_loads(
             floor_load_type=floor_load_type,
             case_id=case_id,
             case_name=case_name,
@@ -60,7 +57,7 @@ class LiveLoadGenerator(LoadGeneratorBase):
 
         custom_loads = parameters.get("custom_loads", [])
         for load_def in custom_loads:
-            generator.add_custom_live_load(
+            self.add_custom_live_load(
                 element_id=load_def["element_id"],
                 element_type=load_def.get("element_type", "beam"),
                 load_value=load_def["load_value"],
@@ -70,13 +67,13 @@ class LiveLoadGenerator(LoadGeneratorBase):
 
         return {
             "status": "success",
-            "load_cases": generator.load_cases,
-            "load_actions": generator.load_actions,
+            "load_cases": self.load_cases,
+            "load_actions": self.load_actions,
             "summary": {
-                "case_count": len(generator.load_cases),
-                "action_count": len(generator.load_actions),
+                "case_count": len(self.load_cases),
+                "action_count": len(self.load_actions),
                 "case_id": case_id,
-                "output_mode": output_mode,
+                "output_mode": self.output_mode,
                 "floor_type": floor_load_type
             }
         }

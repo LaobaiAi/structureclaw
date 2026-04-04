@@ -26,7 +26,7 @@ class WeightCalculationMethod(str, Enum):
     FROM_MODEL_DIRECT = "from_model_direct"  # 从模型直接获取
     FROM_ELEMENTS = "from_elements"  # 从构件计算
     FROM_FLOORS = "from_floors"  # 从楼层计算
-    DEFAULT_VALUE = "default_value"  # 使用默认值
+    AUTO = "auto"  # 自动选择
 
 
 class ForceDistributeMethod(str, Enum):
@@ -165,8 +165,11 @@ class BaseShearCalculator:
 
         Returns:
             推荐的计算方法
+
+        Raises:
+            ValueError: 如果模型数据不足以计算重量
         """
-        # 优先级: 从模型直接获取 > 从楼层计算 > 从构件计算 > 默认值
+        # 优先级: 从模型直接获取 > 从楼层计算 > 从构件计算
         if hasattr(self.model, 'metadata') and 'total_weight' in self.model.metadata:
             return WeightCalculationMethod.FROM_MODEL_DIRECT
 
@@ -176,7 +179,14 @@ class BaseShearCalculator:
         if hasattr(self.model, 'elements') and self.model.elements:
             return WeightCalculationMethod.FROM_ELEMENTS
 
-        return WeightCalculationMethod.DEFAULT_VALUE
+        raise ValueError(
+            "无法计算结构重量: 模型数据不完整。"
+            "请确保模型包含以下信息之一:\n"
+            "  1. model.metadata.total_weight (直接指定总重量)\n"
+            "  2. model.stories (包含楼层信息)\n"
+            "  3. model.elements (包含构件信息)\n"
+            "建议: 先运行恒载计算生成完整的重量数据。"
+        )
 
     def _calculate_total_weight(
         self,
@@ -195,6 +205,9 @@ class BaseShearCalculator:
 
         Returns:
             总重量 (kN)
+
+        Raises:
+            ValueError: 如果计算失败或结果无效
         """
         if self._weight_cache is not None:
             return self._weight_cache
@@ -211,17 +224,27 @@ class BaseShearCalculator:
             elif method == WeightCalculationMethod.FROM_ELEMENTS:
                 total_weight = self._weight_from_elements(live_load_factor)
 
-            elif method == WeightCalculationMethod.DEFAULT_VALUE:
-                logger.error(f"使用默认结构总重量 {DEFAULT_TOTAL_WEIGHT:.1f} kN (建议配置模型重量信息)")
-                total_weight = DEFAULT_TOTAL_WEIGHT
+            else:
+                raise ValueError(f"未知的重量计算方法: {method}")
 
         except Exception as e:
-            logger.error(f"重量计算失败: {e}，使用默认值 {DEFAULT_TOTAL_WEIGHT:.1f} kN")
-            total_weight = DEFAULT_TOTAL_WEIGHT
+            raise ValueError(
+                f"结构重量计算失败 (方法: {method}): {e}\n"
+                "建议:\n"
+                "  1. 检查模型数据完整性\n"
+                "  2. 确保已运行恒载计算\n"
+                "  3. 在模型 metadata 中手动指定 total_weight"
+            ) from e
 
         if total_weight <= 0:
-            logger.error(f"计算出的结构总重量为 0 或负值，使用默认值 {DEFAULT_TOTAL_WEIGHT:.1f} kN")
-            total_weight = DEFAULT_TOTAL_WEIGHT
+            raise ValueError(
+                f"计算出的结构总重量无效: {total_weight} kN\n"
+                "可能原因:\n"
+                "  1. 模型中构件或楼层数据不完整\n"
+                "  2. 材料密度或截面面积设置错误\n"
+                "  3. 恒载工况未正确生成\n"
+                "建议: 检查模型数据并重新运行恒载计算"
+            )
 
         self._weight_cache = total_weight
         return total_weight

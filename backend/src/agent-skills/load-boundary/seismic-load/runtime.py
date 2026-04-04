@@ -384,7 +384,6 @@ def _parse_weight_calculation_method(method_str: str) -> WeightCalculationMethod
         "from_model_direct": WeightCalculationMethod.FROM_MODEL_DIRECT,
         "from_elements": WeightCalculationMethod.FROM_ELEMENTS,
         "from_floors": WeightCalculationMethod.FROM_FLOORS,
-        "default_value": WeightCalculationMethod.DEFAULT_VALUE
     }
     return method_map.get(method_str.lower(), WeightCalculationMethod.AUTO)
 
