@@ -364,13 +364,12 @@ class LoadCombinationGenerator:
         if dead_load_ids and seismic_load_ids:
             for dead_id in dead_load_ids:
                 for seismic_id in seismic_load_ids:
-                    # 基础地震组合
-                    factors = {dead_id: f.gamma_g, seismic_id: f.gamma_eh}
+                    factors = {dead_id: 1.2, seismic_id: f.gamma_eh}
                     
                     # 加入活载代表值
                     if live_load_ids:
                         for live_id in live_load_ids:
-                            factors[live_id] = f.psi_seismic * f.gamma_g
+                            factors[live_id] = f.psi_seismic * 1.2
                     
                     combo = self._create_combination(
                         combination_type="uls",
