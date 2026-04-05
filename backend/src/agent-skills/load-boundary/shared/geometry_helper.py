@@ -291,7 +291,7 @@ class GeometryHelper:
                     return tributary_width
                 elif left_distance is not None:
                     # 只有单侧（左侧/下方）
-                    tributary_width = left_distance
+                    tributary_width = left_distance / 2
                     logger.debug(
                         f"Calculated tributary width for {element.id}: "
                         f"{tributary_width:.2f} m (single side left)"
@@ -299,7 +299,7 @@ class GeometryHelper:
                     return tributary_width
                 elif right_distance is not None:
                     # 只有单侧（右侧/上方）
-                    tributary_width = right_distance
+                    tributary_width = right_distance / 2
                     logger.debug(
                         f"Calculated tributary width for {element.id}: "
                         f"{tributary_width:.2f} m (single side right)"
@@ -310,8 +310,8 @@ class GeometryHelper:
                     logger.warning(f"All parallel beams are on same line for {element.id}")
                     return 0.0
             elif len(parallel_beams) == 1:
-                # 只有一侧的平行梁，受荷宽度 = 单侧距离
-                tributary_width = parallel_beams[0][0]
+                # 只有一侧的平行梁，受荷宽度 = 单侧距离的一半
+                tributary_width = parallel_beams[0][0] / 2
                 logger.debug(
                     f"Calculated tributary width for {element.id}: "
                     f"{tributary_width:.2f} m (single side)"

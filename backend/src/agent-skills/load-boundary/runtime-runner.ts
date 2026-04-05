@@ -69,6 +69,10 @@ except Exception as e:
         stderr += data.toString();
       });
 
+      // Write JSON parameters to stdin (safe from shell injection)
+      pythonProcess.stdin?.write(JSON.stringify(params));
+      pythonProcess.stdin?.end();
+
       // Handle process completion
       const result = await new Promise<LoadBoundaryExecutionOutput>((resolve, reject) => {
         pythonProcess.on('close', (_code) => {
@@ -95,10 +99,6 @@ except Exception as e:
           reject(new Error(`Python process error: ${error.message}`));
         });
       });
-
-      // Write JSON parameters to stdin (safe from shell injection)
-      pythonProcess.stdin?.write(JSON.stringify(params));
-      pythonProcess.stdin?.end();
 
       return result;
     } catch (error) {

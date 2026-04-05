@@ -17,7 +17,9 @@ from constants import (
     LoadDirection,
     LoadType,
     validate_load_value,
-    validate_element_type
+    validate_element_type,
+    get_material_density,
+    LINEAR_LOAD_CONVERSION
 )
 from model_data_helper import ModelDataHelper
 from geometry_helper import GeometryHelper
@@ -199,8 +201,6 @@ class DeadLoadGenerator(LoadGeneratorBase):
         section: Any,
         case_id: str = "LC_DE"
     ) -> Optional[Dict[str, Any]]:
-        from constants import get_material_density, LINEAR_LOAD_CONVERSION
-
         density = get_material_density(material.category)
         if hasattr(material, 'rho') and material.rho:
             density = material.rho
@@ -229,7 +229,7 @@ class DeadLoadGenerator(LoadGeneratorBase):
         load_direction: Optional[Dict[str, float]] = None,
         load_type: str = LoadType.DISTRIBUTED_LOAD
     ) -> None:
-        from constants import validate_element_type, validate_load_value, validate_string_id, validate_dict_value
+        from constants import validate_element_type, validate_string_id, validate_dict_value
 
         validate_string_id(element_id, "单元ID")
         validate_element_type(element_type)

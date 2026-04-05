@@ -436,6 +436,8 @@ class BaseShearCalculator:
         elif section_type in ["i", "t", "box"]:
             if section.width and section.height and section.thickness:
                 # I形、T形、箱形截面 (简化估算)
+                # 注：0.8系数用于考虑截面圆角/倒角导致的内孔面积减小
+                # 这是基于工程经验的估算值，实际精确计算应根据截面详细几何参数
                 outer_area = section.width * section.height
                 inner_area = 0.8 * (section.width - 2 * section.thickness) * (section.height - 2 * section.thickness)
                 area_mm2 = outer_area - inner_area
