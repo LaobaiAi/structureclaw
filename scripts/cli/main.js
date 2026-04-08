@@ -436,18 +436,40 @@ async function ensureUv(rootDir) {
   }
 
   if (runtime.isWindows()) {
-    runtime.requireCommand(
-      "winget",
-      "Install winget, or install uv manually and then rerun `sclaw ensure-uv`.",
-    );
-    await runtime.runCommand("winget", [
-      "install",
-      "--id",
-      "AstralSoftware.UV",
-      "-e",
-      "--accept-package-agreements",
-      "--accept-source-agreements",
+    // Try winget first; fall back to PowerShell installer if winget is unavailable or fails.
+    if (runtime.hasCommand("winget")) {
+      try {
+        await runtime.runCommand("winget", [
+          "install",
+          "--id",
+          "AstralSoftware.UV",
+          "-e",
+          "--accept-package-agreements",
+          "--accept-source-agreements",
+        ]);
+        if (runtime.hasCommand("uv")) {
+          return;
+        }
+      } catch {
+        // winget install failed — fall through to PowerShell installer.
+      }
+    }
+
+    // PowerShell installer (official Astral recommendation for Windows).
+    const ps = runtime.hasCommand("pwsh") ? "pwsh" : "powershell";
+    await runtime.runCommand(ps, [
+      "-ExecutionPolicy",
+      "ByPass",
+      "-Command",
+      "irm https://astral.sh/uv/install.ps1 | iex",
     ]);
+    // The installer puts uv in %USERPROFILE%\.local\bin which may not be on
+    // the current process PATH.  Detect and inject it so subsequent commands
+    // in this process can find uv.
+    const localBin = path.join(os.homedir(), ".local", "bin");
+    if (fs.existsSync(path.join(localBin, "uv.exe")) || fs.existsSync(path.join(localBin, "uv"))) {
+      process.env.PATH = `${localBin};${process.env.PATH}`;
+    }
     runtime.requireCommand(
       "uv",
       "uv installation finished, but `uv` is still unavailable. Restart your terminal and retry.",
@@ -502,6 +524,12 @@ async function ensureAnalysisPython(rootDir, env) {
   }
 
   await ensureUv(rootDir);
+  // ensureUv may have appended to process.env.PATH (e.g. after a fresh uv
+  // install on Windows).  Propagate that to the caller-supplied env dict so
+  // that buildAnalysisEnvironment / runCommand pick it up.
+  if (env.PATH !== process.env.PATH) {
+    env.PATH = process.env.PATH;
+  }
 
   const pythonVersion =
     env.ANALYSIS_PYTHON_VERSION || runtime.DEFAULT_ANALYSIS_PYTHON_VERSION;
@@ -1001,7 +1029,11 @@ async function invokeDoctor(rootDir, env) {
   await ensureNpmDependencies(paths.backendDir, "backend", ["prisma", "@prisma/client"]);
   await ensureNpmDependencies(paths.frontendDir, "frontend", ["next"]);
   await ensureAnalysisPython(rootDir, env);
-  await ensureOpenSeesRuntime(rootDir, env);
+  try {
+    await ensureOpenSeesRuntime(rootDir, env);
+  } catch {
+    log("Warning: OpenSees runtime probe failed — analysis features may be limited in this environment.");
+  }
   await invokeScopedDbInit(rootDir, env, "doctor");
   log("Local startup checks passed.");
 }
