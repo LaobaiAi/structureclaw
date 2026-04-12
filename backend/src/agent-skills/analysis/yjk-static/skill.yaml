@@ -1,0 +1,45 @@
+id: yjk-static
+domain: analysis
+source: builtin
+name:
+  zh: YJK 静力分析
+  en: YJK Static Analysis
+description:
+  zh: 使用 YJK (盈建科) 引擎自动建模并执行静力分析，返回分析输出结果（当前为 YJK .OUT 文本输出；需安装 YJK 8.0 并配置 YJKS_ROOT 或 YJK_PATH）。
+  en: Automated modeling and static analysis using the YJK engine. Returns analysis output results (currently YJK .OUT text output; requires YJK 8.0 and YJKS_ROOT or YJK_PATH).
+triggers:
+  - YJK 静力分析
+  - YJK 计算
+  - 盈建科
+  - yjk static
+  - yjk analysis
+stages:
+  - intent
+  - analysis
+structuralTypeKeys: []
+capabilities:
+  - analysis-policy
+  - analysis-execution
+grants:
+  - run_analysis
+providesTools: []
+requires: []
+conflicts: []
+autoLoadByDefault: false
+priority: 125
+compatibility:
+  minRuntimeVersion: 0.1.0
+  skillApiVersion: v1
+software: yjk
+analysisType: static
+engineId: builtin-yjk
+adapterKey: builtin-yjk
+runtimeRelativePath: runtime.py
+supportedAnalysisTypes:
+  - static
+supportedModelFamilies:
+  - frame
+  - generic
+materialFamilies: []
+aliases: []
+toolHints: {}

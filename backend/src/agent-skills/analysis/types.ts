@@ -17,9 +17,9 @@ export interface LocalAnalysisEngineClient {
   get<T = any>(path: string): Promise<{ data: T }>;
 }
 
-export type BuiltInAnalysisEngineId = 'builtin-opensees' | 'builtin-simplified';
+export type BuiltInAnalysisEngineId = 'builtin-opensees' | 'builtin-pkpm' | 'builtin-yjk' | 'builtin-simplified';
 export type AnalysisRuntimeAdapterKey = BuiltInAnalysisEngineId;
-export type AnalysisSoftware = 'opensees' | 'simplified';
+export type AnalysisSoftware = 'opensees' | 'pkpm' | 'yjk' | 'simplified';
 export type AnalysisModelFamily = 'frame' | 'truss' | 'generic';
 
 export interface AnalysisSkillManifest {

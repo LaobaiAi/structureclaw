@@ -30,7 +30,7 @@ const H_SECTION_PROPERTIES: Record<string, { A: number; Iy: number; Iz: number; 
 };
 
 type SteelGradeProps = { E: number; G: number; nu: number; rho: number; fy: number };
-type SectionProps = { name: string; A: number; Iy: number; Iz: number; J: number; G: number };
+type SectionProps = { name: string; A: number; Iy: number; Iz: number; J: number; G: number; substituted?: string };
 
 export function getDefaultColumnSection(storyCount: number): string {
   if (storyCount > 10) return 'HW400X400';
@@ -69,8 +69,10 @@ function resolveSectionProps(
     ? getDefaultColumnSection(storyCount)
     : getDefaultBeamSection(storyCount);
   const normalized = section ? normalizeSectionName(section) : defaultSection;
-  const sectionKey = H_SECTION_PROPERTIES[normalized] ? normalized : defaultSection;
-  return { name: sectionKey, ...H_SECTION_PROPERTIES[sectionKey]!, G: matG };
+  const found = Boolean(H_SECTION_PROPERTIES[normalized]);
+  const sectionKey = found ? normalized : defaultSection;
+  const substituted = (section && !found) ? `${normalized} not in builtin library, substituted with ${sectionKey}` : undefined;
+  return { name: sectionKey, ...H_SECTION_PROPERTIES[sectionKey]!, G: matG, substituted };
 }
 
 function accumulateCoords(lengths: number[]): number[] {
@@ -170,6 +172,9 @@ function buildFrame2dLocalModel(
       storyCount: storyHeights.length,
       bayCount: bayWidths.length,
       geometry: { storyHeightsM: storyHeights, bayWidthsM: bayWidths },
+      ...(colProps.substituted || beamProps.substituted ? {
+        sectionSubstitutions: [colProps.substituted, beamProps.substituted].filter(Boolean),
+      } : {}),
     },
   };
 }
@@ -271,6 +276,9 @@ function buildFrame3dLocalModel(
       bayCountX: bayWidthsX.length,
       bayCountY: bayWidthsY.length,
       geometry: { storyHeightsM: storyHeights, bayWidthsXM: bayWidthsX, bayWidthsYM: bayWidthsY },
+      ...(colProps.substituted || beamProps.substituted ? {
+        sectionSubstitutions: [colProps.substituted, beamProps.substituted].filter(Boolean),
+      } : {}),
     },
   };
 }

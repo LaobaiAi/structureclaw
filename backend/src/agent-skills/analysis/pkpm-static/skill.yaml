@@ -1,0 +1,46 @@
+id: pkpm-static
+domain: analysis
+source: builtin
+name:
+  zh: PKPM 静力分析
+  en: PKPM Static Analysis
+description:
+  zh: 使用 PKPM SATWE 引擎执行静力分析的 skill（需安装 PKPM 及 JWSCYCLE.exe）。
+  en: Skill for static analysis using the PKPM SATWE engine (requires PKPM installation and JWSCYCLE.exe).
+triggers:
+  - PKPM 静力分析
+  - PKPM 计算
+  - SATWE
+  - pkpm static
+  - pkpm analysis
+stages:
+  - intent
+  - analysis
+structureType: unknown
+structuralTypeKeys: []
+capabilities:
+  - analysis-policy
+  - analysis-execution
+grants:
+  - run_analysis
+providesTools: []
+requires: []
+conflicts: []
+autoLoadByDefault: true
+priority: 130
+compatibility:
+  minRuntimeVersion: 0.1.0
+  skillApiVersion: v1
+software: pkpm
+analysisType: static
+engineId: builtin-pkpm
+adapterKey: builtin-pkpm
+runtimeRelativePath: runtime.py
+supportedAnalysisTypes:
+  - static
+supportedModelFamilies:
+  - frame
+  - generic
+materialFamilies: []
+aliases: []
+toolHints: {}

@@ -122,6 +122,20 @@ export const BUILTIN_ANALYSIS_ENGINES: AnalysisEngineDefinition[] = [
     constraints: { requiresOpenSees: true },
   }),
   buildEngineDefinition(BUILTIN_ANALYSIS_SKILLS, {
+    id: 'builtin-pkpm',
+    name: 'PKPM Builtin',
+    priority: 90,
+    routingHints: ['commercial', 'design-code'],
+    constraints: { requiresPKPM: true },
+  }),
+  buildEngineDefinition(BUILTIN_ANALYSIS_SKILLS, {
+    id: 'builtin-yjk',
+    name: 'YJK Builtin',
+    priority: 85,
+    routingHints: ['commercial', 'design-code'],
+    constraints: { requiresYJK: true },
+  }),
+  buildEngineDefinition(BUILTIN_ANALYSIS_SKILLS, {
     id: 'builtin-simplified',
     name: 'Simplified Builtin',
     priority: 10,
