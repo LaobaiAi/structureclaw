@@ -302,10 +302,22 @@ def _extract_grid_spans(nodes: list[dict]) -> tuple[list[int], list[int]]:
     sorted_y = sorted(ys)
 
     if len(sorted_x) < 2 or len(sorted_y) < 2:
-        raise ValueError(
-            f"Need at least 2 unique X and 2 unique Y coordinates, "
-            f"got {len(sorted_x)} X and {len(sorted_y)} Y"
-        )
+        # 2D frame models may have only 1 unique coordinate on one axis
+        # after V1→V2 remap (XZ plane → Y=0, YZ plane → X=0).
+        # Synthesize a nominal span so YJK can proceed.
+        if len(sorted_x) >= 2 and len(sorted_y) < 2:
+            nominal_y = sorted_y[0] if sorted_y else 0
+            # Use 1000 as a default span for 2D models; can be optimized later
+            sorted_y = [nominal_y, nominal_y + 1000]
+        elif len(sorted_y) >= 2 and len(sorted_x) < 2:
+            nominal_x = sorted_x[0] if sorted_x else 0
+            # Use 1000 as a default span for 2D models; can be optimized later
+            sorted_x = [nominal_x, nominal_x + 1000]
+        else:
+            raise ValueError(
+                f"Need at least 2 unique coordinates in at least one plan direction (X or Y) "
+                f"to form a grid. Got {len(sorted_x)} X and {len(sorted_y)} Y."
+            )
 
     xspans = [int(sorted_x[0])]
     for i in range(1, len(sorted_x)):
