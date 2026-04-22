@@ -307,11 +307,9 @@ def _extract_grid_spans(nodes: list[dict]) -> tuple[list[int], list[int]]:
         # Synthesize a nominal span so YJK can proceed.
         if len(sorted_x) >= 2 and len(sorted_y) < 2:
             nominal_y = sorted_y[0] if sorted_y else 0
-            # Use 1000 as a default span for 2D models; can be optimized later
             sorted_y = [nominal_y, nominal_y + 1000]
         elif len(sorted_y) >= 2 and len(sorted_x) < 2:
             nominal_x = sorted_x[0] if sorted_x else 0
-            # Use 1000 as a default span for 2D models; can be optimized later
             sorted_x = [nominal_x, nominal_x + 1000]
         else:
             raise ValueError(
@@ -443,23 +441,54 @@ def convert_v2_to_ydb(
         _log(f"ERROR: beam arrangement failed: {exc}")
         raise
 
-    # Assemble floors story by story to support varying story heights.
-    # Each story gets its own StdFlr with the correct height and loads.
-    # If all stories share the same height the loop degenerates to a single call.
-    for i, story in enumerate(stories):
-        s_height_mm = int(round(float(story.get("height", first_story["height"])) * M_TO_MM))
-        if s_height_mm <= 0:
-            s_height_mm = height_mm
-        s_dead, s_live = _get_floor_loads(story)
-        s_flr = data_func.StdFlr_Generate(s_height_mm, s_dead, s_live) if (
-            s_height_mm != height_mm or s_dead != dead or s_live != live
+    # Assemble floors story by story.
+    #
+    # Floors_Assemb signature: (H_start_mm, std_flr, num_floors, floor_height_mm)
+    #   H_start_mm  — cumulative elevation (mm) where this batch of floors begins
+    #   std_flr     — standard floor definition from StdFlr_Generate
+    #   num_floors  — how many consecutive floors to create with this definition
+    #   floor_height_mm — storey height for these floors (mm)
+    #
+    # Group consecutive stories that share the same height and loads so we can
+    # batch them into a single Floors_Assemb call (matching the SDK pattern).
+    # For varying heights we issue multiple calls with the correct H_start.
+    cumulative_h = 0
+    group_start = 0
+    while group_start < len(stories):
+        ref = stories[group_start]
+        ref_h = int(round(float(ref.get("height", first_story["height"])) * M_TO_MM))
+        if ref_h <= 0:
+            ref_h = height_mm
+        ref_dead, ref_live = _get_floor_loads(ref)
+
+        # Count how many consecutive stories share the same height & loads
+        group_count = 1
+        for j in range(group_start + 1, len(stories)):
+            s = stories[j]
+            s_h = int(round(float(s.get("height", first_story["height"])) * M_TO_MM))
+            if s_h <= 0:
+                s_h = height_mm
+            s_dead, s_live = _get_floor_loads(s)
+            if s_h == ref_h and s_dead == ref_dead and s_live == ref_live:
+                group_count += 1
+            else:
+                break
+
+        s_flr = data_func.StdFlr_Generate(ref_h, ref_dead, ref_live) if (
+            ref_h != height_mm or ref_dead != dead or ref_live != live
         ) else std_flr
-        _log(f"Assembling floor {i + 1}/{len(stories)}: height={s_height_mm}mm, dead={s_dead}, live={s_live}")
+
+        _log(f"Floors_Assemb(H_start={cumulative_h}, flr, count={group_count}, h={ref_h}) "
+             f"[stories {group_start + 1}-{group_start + group_count}]")
         try:
-            data_func.Floors_Assemb(i, s_flr, 1, s_height_mm)
+            data_func.Floors_Assemb(cumulative_h, s_flr, group_count, ref_h)
         except Exception as exc:
-            _log(f"ERROR: Floors_Assemb failed for story {i + 1}: {exc}")
+            _log(f"ERROR: Floors_Assemb failed for stories {group_start + 1}-{group_start + group_count}: {exc}")
             raise
+
+        cumulative_h += ref_h * group_count
+        group_start += group_count
+
     _log("Floors_Assemb completed")
 
     _log("Assigning model to database...")
