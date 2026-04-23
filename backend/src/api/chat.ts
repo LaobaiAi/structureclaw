@@ -1,9 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { ConversationService } from '../services/conversation.js';
-import { AgentService } from '../services/agent.js';
 import { config } from '../config/index.js';
-import { isLlmTimeoutError, toLlmApiError } from '../utils/llm-error.js';
+import { isLlmTimeoutError, isContextOverflowError, toLlmApiError } from '../utils/llm-error.js';
 import { prisma } from '../utils/database.js';
 import type { InputJsonValue } from '../utils/json.js';
 import {
@@ -12,9 +11,12 @@ import {
   reducePresentationEvent,
   type AssistantPresentation,
 } from '../services/chat-presentation.js';
+import { getAgentService } from '../agent-langgraph/index.js';
+import type { AgentState } from '../agent-langgraph/state.js';
+import type { BaseMessage } from '@langchain/core/messages';
 
 const conversationService = new ConversationService();
-const agentService = new AgentService();
+const agentService = getAgentService();
 
 const optionalIdSchema = z.preprocess((value) => {
   if (value === null || value === undefined) {
@@ -94,6 +96,11 @@ const streamMessageSchema = z.object({
     providedValues: z.record(z.any()).optional(),
     resumeFromMessage: z.string().max(10000).optional(),
   }).optional(),
+});
+
+const resumeStreamSchema = z.object({
+  conversationId: z.string().min(1),
+  resumeValue: z.string().min(1).max(10000),
 });
 
 const persistMessagesSchema = z.object({
@@ -311,6 +318,82 @@ async function persistConversationMessages(params: {
   }
 }
 
+/**
+ * Persist the full LangGraph message history (including tool calls) into the
+ * DB. This is called after streaming completes so that conversation restore
+ * includes all intermediate tool messages, not just the final user/assistant
+ * pair written by persistConversationMessages.
+ *
+ * Strategy: incremental append — compare DB message count against graph state
+ * message count and only insert the delta.
+ */
+async function persistFullConversationMessages(params: {
+  conversationId: string;
+  state: AgentState;
+}): Promise<void> {
+  const { conversationId, state } = params;
+  if (!conversationId || !Array.isArray(state.messages)) return;
+
+  try {
+    const existingCount = await prisma.message.count({
+      where: { conversationId },
+    });
+
+    const allMessages: BaseMessage[] = state.messages;
+    if (allMessages.length <= existingCount) return;
+
+    const newMessages = allMessages.slice(existingCount);
+    const records = newMessages.map((msg): Record<string, unknown> | null => {
+      if (msg == null || typeof msg !== 'object') return null;
+
+      const getType = typeof (msg as any)._getType === 'function' ? (msg as any)._getType() : null;
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : Array.isArray(msg.content)
+          ? msg.content
+              .filter((b: unknown): b is { type: string; text: string } =>
+                typeof b === 'object' && b !== null && 'text' in b)
+              .map((b) => b.text)
+              .join('')
+          : JSON.stringify(msg.content);
+
+      if (getType === 'human') {
+        return {
+          conversationId,
+          role: 'user',
+          content: typeof content === 'string' ? content : JSON.stringify(content),
+        };
+      }
+      if (getType === 'ai') {
+        const toolCalls = (msg as any).tool_calls;
+        return {
+          conversationId,
+          role: 'assistant',
+          content: typeof content === 'string' ? content : JSON.stringify(content),
+          toolCalls: Array.isArray(toolCalls) && toolCalls.length > 0 ? toolCalls : undefined,
+        };
+      }
+      if (getType === 'tool') {
+        return {
+          conversationId,
+          role: 'tool',
+          content: typeof content === 'string' ? content : JSON.stringify(content),
+          name: (msg as any).name || undefined,
+          toolCallId: (msg as any).tool_call_id || undefined,
+        };
+      }
+      // Skip system messages and unknown types
+      return null;
+    }).filter((r): r is Record<string, unknown> => r !== null);
+
+    if (records.length > 0) {
+      await prisma.message.createMany({ data: records as any });
+    }
+  } catch (error) {
+    console.warn('[chat] skip full message persistence:', error instanceof Error ? error.message : String(error));
+  }
+}
+
 export async function chatRoutes(fastify: FastifyInstance) {
   // 发送消息
   fastify.post('/message', {
@@ -333,6 +416,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
       const body = sendMessageSchema.parse(request.body);
       const userId = request.user?.id;
       const effectiveMessage = buildEffectiveAgentMessage(body.message, body.context?.resumeFromMessage);
+
       const result = await agentService.run({
         ...body,
         message: effectiveMessage,
@@ -343,14 +427,14 @@ export async function chatRoutes(fastify: FastifyInstance) {
         userId,
         latestResult: result,
       });
-      const assistantText = result.response || result.clarification?.question || '';
+      const assistantText = result.response || '';
       const assistantPresentation = rebuildAssistantPresentationFromResult({
         base: createEmptyAssistantPresentation({
           traceId: result.traceId ?? body.traceId,
           mode: Array.isArray(result.toolCalls) && result.toolCalls.length > 0 ? 'execution' : 'conversation',
           startedAt: result.startedAt,
         }),
-        result,
+        result: result as any,
         mode: Array.isArray(result.toolCalls) && result.toolCalls.length > 0 ? 'execution' : 'conversation',
         locale: body.context?.locale ?? 'en',
         traceId: result.traceId ?? body.traceId,
@@ -370,6 +454,21 @@ export async function chatRoutes(fastify: FastifyInstance) {
         assistantMetadata: debugDetails ? { debugDetails } : undefined,
         assistantPresentation,
       });
+
+      // Persist full LangGraph message history for conversation restore
+      try {
+        const snapshot = await agentService.getConversationSessionSnapshot(
+          result.conversationId,
+          body.context?.locale ?? 'en',
+        );
+        if (snapshot?.state) {
+          await persistFullConversationMessages({
+            conversationId: result.conversationId,
+            state: snapshot.state,
+          });
+        }
+      } catch { /* best-effort */ }
+
       return reply.send({ result });
     } catch (error) {
       const mappedError = toLlmApiError(error);
@@ -423,7 +522,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
       return reply.send(conversation);
     }
 
-    const session = await agentService.getConversationSessionSnapshot(id, query.locale || 'en');
+    const session = await agentService.getConversationSessionSnapshot(id, query.locale ?? 'en');
     const snapshots = await conversationService.getConversationSnapshot(id);
     return reply.send({
       ...conversation,
@@ -748,9 +847,18 @@ export async function chatRoutes(fastify: FastifyInstance) {
           chunk
           && typeof chunk === 'object'
           && (chunk as { type?: string }).type === 'interaction_update'
-          && (chunk as { content?: { guidanceText?: string } }).content?.guidanceText
+          && (chunk as { content?: unknown }).content
         ) {
-          assistantContent = (chunk as { content: { guidanceText: string } }).content.guidanceText;
+          const interactionContent = (chunk as { content: Record<string, unknown> }).content;
+          if (typeof interactionContent.guidanceText === 'string') {
+            assistantContent = interactionContent.guidanceText;
+          } else if (
+            Array.isArray(interactionContent.questions)
+            && interactionContent.questions.length > 0
+            && typeof (interactionContent.questions[0] as { question?: string })?.question === 'string'
+          ) {
+            assistantContent = (interactionContent.questions[0] as { question: string }).question;
+          }
         }
         reply.raw.write(`data: ${JSON.stringify(normalizePublicStreamChunk(chunk))}\n\n`);
       }
@@ -759,6 +867,23 @@ export async function chatRoutes(fastify: FastifyInstance) {
       // This runs for both completed and aborted streams.
       const wasAborted = abortController.signal.aborted;
       await persistStreamMessages(wasAborted);
+
+      // Persist full LangGraph message history (including tool calls) for
+      // conversation restore. Best-effort — don't block the response.
+      if (!wasAborted && streamConversationId) {
+        try {
+          const snapshot = await agentService.getConversationSessionSnapshot(
+            streamConversationId,
+            body.context?.locale ?? 'en',
+          );
+          if (snapshot?.state) {
+            await persistFullConversationMessages({
+              conversationId: streamConversationId,
+              state: snapshot.state,
+            });
+          }
+        } catch { /* best-effort */ }
+      }
 
       reply.raw.write('data: [DONE]\n\n');
       reply.raw.end();
@@ -778,6 +903,103 @@ export async function chatRoutes(fastify: FastifyInstance) {
     } finally {
       // Ensure messages are persisted even on unexpected errors.
       await persistStreamMessages(abortController.signal.aborted).catch(() => {});
+      reply.raw.off('close', onClose);
+      request.socket.off('close', onClose);
+    }
+  });
+
+  // Resume a paused LangGraph agent (human-in-the-loop clarification response)
+  fastify.post('/stream/resume', {
+    schema: {
+      tags: ['Chat'],
+      summary: 'Resume a paused agent after human clarification',
+    },
+  }, async (request: FastifyRequest<{ Body: z.infer<typeof resumeStreamSchema> }>, reply: FastifyReply) => {
+    const body = resumeStreamSchema.parse(request.body);
+
+    reply.hijack();
+    setSseCorsHeaders(request, reply);
+    reply.raw.setHeader('Content-Type', 'text/event-stream');
+    reply.raw.setHeader('Cache-Control', 'no-cache');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.raw.setHeader('X-Accel-Buffering', 'no');
+    reply.raw.flushHeaders?.();
+
+    const abortController = new AbortController();
+    const onClose = () => { abortController.abort(); };
+    reply.raw.on('close', onClose);
+    request.socket.on('close', onClose);
+
+    try {
+      const stream = agentService.resumeStream(
+        body.conversationId,
+        body.resumeValue,
+      );
+
+      let resumeAssistantContent = '';
+      let resumePresentation: AssistantPresentation | undefined;
+      let resumeLatestResult: Record<string, unknown> | undefined;
+
+      for await (const chunk of stream) {
+        if (abortController.signal.aborted) break;
+        if (chunk.type === 'token' && 'content' in chunk) {
+          resumeAssistantContent += (chunk as any).content || '';
+        }
+        if (chunk.type === 'presentation_init' && 'presentation' in chunk) {
+          resumePresentation = (chunk as any).presentation;
+        }
+        if (chunk.type === 'result' && 'content' in chunk) {
+          resumeLatestResult = (chunk as any).content;
+        }
+        reply.raw.write(`data: ${JSON.stringify(normalizePublicStreamChunk(chunk))}\n\n`);
+      }
+
+      // Persist resume messages to DB
+      await persistConversationMessages({
+        conversationId: body.conversationId,
+        userMessage: body.resumeValue,
+        assistantContent: resumeAssistantContent,
+        traceId: undefined,
+        assistantPresentation: resumePresentation,
+      }).catch(() => {});
+
+      if (resumeLatestResult) {
+        await persistLatestConversationResult({
+          conversationId: body.conversationId,
+          latestResult: resumeLatestResult,
+        }).catch(() => {});
+      }
+
+      // Persist full LangGraph message history for conversation restore
+      try {
+        const snapshot = await agentService.getConversationSessionSnapshot(
+          body.conversationId,
+          'en',
+        );
+        if (snapshot?.state) {
+          await persistFullConversationMessages({
+            conversationId: body.conversationId,
+            state: snapshot.state,
+          });
+        }
+      } catch { /* best-effort */ }
+
+      reply.raw.write('data: [DONE]\n\n');
+      reply.raw.end();
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        request.log.info({ conversationId: body.conversationId }, 'Resume stream aborted by client');
+        reply.raw.end();
+      } else {
+        request.log.error({ err: error }, 'Unexpected error in /api/v1/chat/stream/resume');
+        reply.raw.write(`data: ${JSON.stringify({
+          type: 'error',
+          error: error instanceof Error ? error.message : 'resume failed',
+        })}\n\n`);
+        reply.raw.write('data: [DONE]\n\n');
+        reply.raw.end();
+      }
+    } finally {
       reply.raw.off('close', onClose);
       request.socket.off('close', onClose);
     }
@@ -804,6 +1026,14 @@ function normalizePublicStreamChunk(chunk: unknown): unknown {
       ...value,
       code: 'LLM_TIMEOUT',
       retriable: true,
+    };
+  }
+
+  if (isContextOverflowError(value.error)) {
+    return {
+      ...value,
+      code: 'CONTEXT_OVERFLOW',
+      retriable: false,
     };
   }
 

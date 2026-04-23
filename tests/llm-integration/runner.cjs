@@ -26,12 +26,12 @@ async function importAgentSkillRuntime(rootDir) {
   return mod.AgentSkillRuntime;
 }
 
-/** Import and instantiate AgentService with real LLM. */
-async function createAgentService(rootDir) {
-  const filePath = path.join(rootDir, "backend", "dist", "services", "agent.js");
+/** Import and instantiate LangGraphAgentService with real LLM. */
+async function createAgentService(rootDir, skillRuntime) {
+  const filePath = path.join(rootDir, "backend", "dist", "agent-langgraph", "agent-service.js");
   const mod = await import(`${pathToFileURL(filePath).href}?llm-test=${Date.now()}`);
-  const AgentService = mod.AgentService;
-  return new AgentService();
+  const LangGraphAgentService = mod.LangGraphAgentService;
+  return new LangGraphAgentService(skillRuntime);
 }
 
 // ---------------------------------------------------------------------------
@@ -63,9 +63,12 @@ async function runLlmIntegrationTests(rootDir, args) {
     stdio: "pipe",
   });
 
-  // Load test cases
+  // Load test cases — default to routing-only since extraction/pipeline/clarification
+  // categories depend on the legacy AgentService API (textToModelDraft etc.)
+  // which no longer exists under the LangGraph ReAct architecture.
+  const effectiveCategory = options.category || "routing";
   const allCases = loadLlmFixtures(rootDir);
-  const cases = filterLlmTestCases(allCases, options);
+  const cases = filterLlmTestCases(allCases, { ...options, category: effectiveCategory });
 
   if (cases.length === 0) {
     process.stdout.write("No test cases matched.\n");
@@ -109,7 +112,7 @@ async function runLlmIntegrationTests(rootDir, args) {
             break;
           case "pipeline": {
             if (!agentService) {
-              agentService = await createAgentService(rootDir);
+              agentService = await createAgentService(rootDir, runtime);
             }
             pipelineResult = await runPipelineTest(agentService, testCase);
             break;

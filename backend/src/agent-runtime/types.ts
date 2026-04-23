@@ -290,18 +290,6 @@ export interface AgentSkillPlugin extends AgentSkillBundle {
   handler: SkillHandler;
 }
 
-export interface SkillExecutionResult {
-  inferredType?: InferredModelType;
-  draftPatch?: DraftExtraction;
-  missingCritical?: string[];
-  missingOptional?: string[];
-  questions?: InteractionQuestion[];
-  defaultProposals?: Array<{ paramKey: string; value: unknown; reason: string }>;
-  stage?: 'intent' | 'model' | 'loads' | 'analysis' | 'code_check' | 'report';
-  supportLevel?: StructuralTypeSupportLevel;
-  supportNote?: string;
-}
-
 export interface AgentSkillExecutorInput {
   message: string;
   locale: AppLocale;
@@ -382,33 +370,6 @@ export interface VisualizationHints {
 // ---------------------------------------------------------------------------
 // Scheduler runtime contract types
 // ---------------------------------------------------------------------------
-
-// --- Scheduler Tool ---
-
-export type SchedulerTool =
-  | 'draft_model'
-  | 'update_model'
-  | 'convert_model'
-  | 'validate_model'
-  | 'synthesize_design'
-  | 'run_analysis'
-  | 'postprocess_result'
-  | 'run_code_check'
-  | 'generate_drawing'
-  | 'generate_report'
-  | 'enrich_model';
-
-// --- Skill Role ---
-
-export type SkillRole =
-  | 'entry'
-  | 'enricher'
-  | 'designer'
-  | 'validator'
-  | 'provider'
-  | 'transformer'
-  | 'consumer'
-  | 'assistant';
 
 // --- Artifact kinds ---
 
@@ -591,19 +552,6 @@ export type SkillRuntimeContract =
   | TransformerRuntimeContract
   | BaseRuntimeContract;
 
-// --- Interaction checkpoint ---
-
-export type CheckpointKind = 'clarification' | 'design-proposal' | 'approval' | 'blocked';
-
-export interface InteractionCheckpoint {
-  checkpointId: string;
-  kind: CheckpointKind;
-  targetArtifact?: ArtifactKind;
-  patchId?: string;
-  summary: string;
-  createdAt: number;
-}
-
 // --- Pipeline state ---
 
 export interface ProjectArtifactState {
@@ -623,64 +571,4 @@ export interface ProjectPipelineState {
   artifacts: ProjectArtifactState;
   patches?: ModelPatchRecord[];
   updatedAt: number;
-}
-
-// --- Session working state (spec section 14) ---
-
-export interface SessionWorkingState {
-  selectedSkillIds: string[];
-  locale: import('../services/locale.js').AppLocale;
-  draftState?: ArtifactEnvelope;
-  checkpoint?: InteractionCheckpoint;
-  updatedAt: number;
-}
-
-// --- Run record ---
-
-export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'canceled';
-
-export interface RunRecord {
-  runId: string;
-  targetArtifact: ArtifactKind;
-  toolId: string;
-  providerSkillId?: string;
-  status: RunStatus;
-  inputFingerprint: string;
-  startedAt?: number;
-  finishedAt?: number;
-  diagnostics?: string[];
-}
-
-// --- Scheduler types ---
-
-export interface SchedulerStep {
-  stepId: string;
-  role: SkillRole;
-  tool: SchedulerTool;
-  skillId?: string;
-  consumes: ArtifactRef[];
-  provides?: ArtifactKind;
-  mode: 'reuse' | 'execute' | 'transform' | 'queue-run' | 'ask-user' | 'propose' | 'block' | 'approval';
-  reason: string;
-}
-
-export interface SchedulerInput {
-  message: string;
-  locale: AppLocale;
-  selectedSkillIds: string[];
-  bindings: ProviderBindingState;
-  projectPolicy: ProjectExecutionPolicy;
-  targetArtifact: ArtifactKind | 'chatReply';
-  sessionArtifacts: {
-    draftState?: ArtifactEnvelope;
-  };
-  projectArtifacts: Partial<Record<ProjectArtifactKind, ArtifactEnvelope>>;
-  requestOverrides?: RequestExecutionOverrides;
-  structuralSkillId?: string;
-}
-
-export interface SchedulerPlan {
-  targetArtifact: ArtifactKind | 'chatReply';
-  requiredSteps: SchedulerStep[];
-  blockedReason?: string;
 }
