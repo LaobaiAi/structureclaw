@@ -58,13 +58,6 @@ function safeResolve(workspaceRoot: string, requestedPath: string): string {
   return resolved;
 }
 
-/** Emit a custom streaming event via config.writer. */
-function emitStreamEvent(config: LangGraphRunnableConfig, event: unknown): void {
-  if (typeof (config as any).writer === 'function') {
-    (config as any).writer(event);
-  }
-}
-
 /**
  * Create a Command that updates graph state channels AND adds a ToolMessage.
  * This is the recommended LangGraph pattern for tools that produce artifacts.
@@ -268,12 +261,6 @@ export function createBuildModelTool(skillRuntime: AgentSkillRuntime) {
       const skillIds = input.skillIdsJson
         ? JSON.parse(input.skillIdsJson) as string[]
         : undefined;
-
-      emitStreamEvent(config, {
-        type: 'step_upsert',
-        phaseId: 'phase-modeling',
-        step: { id: `step-${toolCallId}`, phase: 'modeling', status: 'running', tool: 'build_model', title: 'build_model', startedAt: new Date().toISOString() },
-      });
 
       const model = await skillRuntime.buildModel(draftState, skillIds);
       if (!model) {
@@ -623,13 +610,6 @@ export function createRunAnalysisTool(skillRuntime: AgentSkillRuntime) {
       const analysisType = (input.analysisType || 'static') as 'static' | 'dynamic' | 'seismic' | 'nonlinear';
       const traceId = `lg-${Date.now()}`;
 
-      // Emit streaming event: analysis starting
-      emitStreamEvent(config, {
-        type: 'step_upsert',
-        phaseId: 'phase-analysis',
-        step: { id: `step-${toolCallId}`, phase: 'analysis', status: 'running', tool: 'run_analysis', title: 'run_analysis', startedAt: new Date().toISOString() },
-      });
-
       const engineClient = configurable.engineClient;
       const postToEngineWithRetry = async (
         p: string,
@@ -716,13 +696,6 @@ export function createRunCodeCheckTool(skillRuntime: AgentSkillRuntime) {
       }
       const traceId = `lg-cc-${Date.now()}`;
 
-      // Emit streaming event
-      emitStreamEvent(config, {
-        type: 'step_upsert',
-        phaseId: 'phase-analysis',
-        step: { id: `step-${toolCallId}`, phase: 'analysis', status: 'running', tool: 'run_code_check', title: 'run_code_check', startedAt: new Date().toISOString() },
-      });
-
       const result = await skillRuntime.executeCodeCheckSkill({
         codeCheckClient: configurable.codeCheckClient,
         traceId,
@@ -778,13 +751,6 @@ export function createGenerateReportTool(skillRuntime: AgentSkillRuntime) {
       const skillIds = input.skillIdsJson ? JSON.parse(input.skillIdsJson) as string[] : undefined;
       const locale = (input.locale === 'en' ? 'en' : (state?.locale || 'zh')) as 'zh' | 'en';
       const analysisType = (input.analysisType || 'static') as 'static' | 'dynamic' | 'seismic' | 'nonlinear';
-
-      // Emit streaming event
-      emitStreamEvent(config, {
-        type: 'step_upsert',
-        phaseId: 'phase-report',
-        step: { id: `step-${toolCallId}`, phase: 'report', status: 'running', tool: 'generate_report', title: 'generate_report', startedAt: new Date().toISOString() },
-      });
 
       const result = await skillRuntime.executeReportSkill({
         message: input.message,

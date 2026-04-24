@@ -2996,6 +2996,19 @@ export function AIConsole() {
     let shouldBumpConversationActivity = false
     const abortController = new AbortController()
     const traceId = assistantMessageId
+
+    function finalizeStreamingMessage(message: Message, contentFallback: string, presentation: AssistantPresentation | null | undefined): Message {
+      if (message.status !== 'streaming') return message
+      return {
+        ...message,
+        content: message.content || contentFallback,
+        status: 'done' as const,
+        toolStep: message.role === 'tool' && message.toolStep?.status === 'running'
+          ? { ...message.toolStep, status: 'done' as const }
+          : message.toolStep,
+        presentation: message.role === 'tool' ? undefined : (presentation ?? message.presentation),
+      }
+    }
     setIsStreaming(true)
 
     // --- Multi-bubble tracking ---
@@ -3272,27 +3285,37 @@ export function AIConsole() {
 
           if (payload.type === 'step_upsert' && payload.phaseId && payload.step) {
             if (payload.step.status === 'running') {
-              // Finalize current text message
-              if (currentTextMessageId) {
-                replaceMessageForConversation(activeConversationId, currentTextMessageId, (msg) => {
-                  if (msg.status !== 'streaming') return msg
-                  return { ...msg, status: 'done' as const }
+              const existingToolMsgId = toolMessageIds.get(payload.step.id)
+
+              if (existingToolMsgId) {
+                // Duplicate running event — update existing message instead of creating a new one
+                replaceMessageForConversation(activeConversationId, existingToolMsgId, (msg) => ({
+                  ...msg,
+                  toolStep: { ...msg.toolStep!, ...payload.step },
+                }))
+              } else {
+                // Finalize current text message
+                if (currentTextMessageId) {
+                  replaceMessageForConversation(activeConversationId, currentTextMessageId, (msg) => {
+                    if (msg.status !== 'streaming') return msg
+                    return { ...msg, status: 'done' as const }
+                  })
+                  currentTextMessageId = ''
+                  chatBuffer = ''  // Reset so next text bubble only contains new tokens
+                }
+                // Create a new tool message bubble
+                const toolMsgId = createId('tool')
+                toolMessageIds.set(payload.step.id, toolMsgId)
+                turnMessageIds.add(toolMsgId)
+                appendMessageForConversation(activeConversationId, {
+                  id: toolMsgId,
+                  role: 'tool',
+                  content: '',
+                  status: 'streaming',
+                  timestamp: new Date().toISOString(),
+                  toolStep: payload.step,
                 })
-                currentTextMessageId = ''
-                chatBuffer = ''  // Reset so next text bubble only contains new tokens
               }
-              // Create a new tool message bubble
-              const toolMsgId = createId('tool')
-              toolMessageIds.set(payload.step.id, toolMsgId)
-              turnMessageIds.add(toolMsgId)
-              appendMessageForConversation(activeConversationId, {
-                id: toolMsgId,
-                role: 'tool',
-                content: '',
-                status: 'streaming',
-                timestamp: new Date().toISOString(),
-                toolStep: payload.step,
-              })
               // Also track in presentation (for data continuity)
               if (currentPresentationRef.current) {
                 const nextPresentation = reducePresentationEvent(currentPresentationRef.current, {
@@ -3490,15 +3513,9 @@ export function AIConsole() {
       } else {
         // Finalize all still-streaming messages from this turn
         for (const msgId of turnMessageIds) {
-          replaceMessageForConversation(activeConversationId, msgId, (message) => {
-            if (message.status !== 'streaming') return message
-            return {
-              ...message,
-              content: message.content || assistantSeed,
-              status: 'done' as const,
-              presentation: message.role === 'tool' ? undefined : (currentPresentationRef.current ?? message.presentation),
-            }
-          })
+          replaceMessageForConversation(activeConversationId, msgId, (message) =>
+            finalizeStreamingMessage(message, assistantSeed, currentPresentationRef.current)
+          )
         }
         if (assistantContent !== assistantSeed || receivedResult) {
           shouldBumpConversationActivity = true
@@ -3512,14 +3529,9 @@ export function AIConsole() {
 
         if ((receivedResult || assistantContent !== assistantSeed) && nextError === 'Failed to fetch') {
           for (const msgId of turnMessageIds) {
-            replaceMessageForConversation(activeConversationId, msgId, (message) => {
-              if (message.status !== 'streaming') return message
-              return {
-                ...message,
-                status: 'done' as const,
-                presentation: message.role === 'tool' ? undefined : (currentPresentationRef.current ?? message.presentation),
-              }
-            })
+            replaceMessageForConversation(activeConversationId, msgId, (message) =>
+              finalizeStreamingMessage(message, '', currentPresentationRef.current)
+            )
           }
         } else {
           if (activeConversationId === conversationIdRef.current) {
@@ -3912,19 +3924,22 @@ export function AIConsole() {
                   key={message.id}
                   className={cn('flex gap-3', message.role === 'user' ? 'justify-end' : 'justify-start')}
                 >
-                  {/* Tool message — compact card, no avatar/header */}
+                  {/* Tool message — compact card, aligned with grouped tools */}
                   {message.role === 'tool' && (
-                    <div className="max-w-[82%]">
-                      {message.toolStep && (
-                        <ToolCallCard step={message.toolStep} t={t} />
-                      )}
-                      {message.status === 'streaming' && !message.toolStep && (
-                        <span className="inline-flex items-center gap-1.5" role="status">
-                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-500 dark:bg-cyan-400" />
-                          <span className="text-xs text-muted-foreground animate-pulse">{t('streamingInProgress')}</span>
-                        </span>
-                      )}
-                    </div>
+                    <>
+                      <div className="w-10 shrink-0" />
+                      <div className="max-w-[82%]">
+                        {message.toolStep && (
+                          <ToolCallCard step={message.toolStep} t={t} />
+                        )}
+                        {message.status === 'streaming' && !message.toolStep && (
+                          <span className="inline-flex items-center gap-1.5" role="status">
+                            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-500 dark:bg-cyan-400" />
+                            <span className="text-xs text-muted-foreground animate-pulse">{t('streamingInProgress')}</span>
+                          </span>
+                        )}
+                      </div>
+                    </>
                   )}
 
                   {/* User and assistant messages */}
