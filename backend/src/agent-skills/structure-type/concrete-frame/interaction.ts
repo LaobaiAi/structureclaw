@@ -64,7 +64,7 @@ function buildConcreteFrameDefaultReason(paramKey: string, locale: AppLocale, st
 
 export function computeConcreteFrameMissing(state: DraftState, phase: 'interactive' | 'execution'): SkillMissingResult {
   return computeLegacyMissing(
-    { ...state, inferredType: 'frame' },
+    { ...state, inferredType: 'concrete-frame' },
     phase,
     [...REQUIRED_KEYS],
   );
@@ -87,7 +87,7 @@ export function buildConcreteFrameDefaultProposals(
   locale: AppLocale,
 ): SkillDefaultProposal[] {
   const storyCount = (state.storyHeightsM?.length ?? (state.storyCount as number | undefined)) ?? 0;
-  const questions = buildInteractionQuestions(keys, [], { ...state, inferredType: 'frame' }, locale);
+  const questions = buildInteractionQuestions(keys, [], { ...state, inferredType: 'concrete-frame' }, locale);
   const next = new Map<string, SkillDefaultProposal>();
 
   for (const question of questions) {
@@ -147,7 +147,7 @@ export function buildConcreteFrameQuestions(
   const inferredDimension = inferConcreteFrameDimensionProposal(state);
   const storyCount = (state.storyHeightsM?.length ?? (state.storyCount as number | undefined)) ?? 0;
 
-  return buildInteractionQuestions(keys, criticalMissing, { ...state, inferredType: 'frame' }, locale).map((question) => {
+  return buildInteractionQuestions(keys, criticalMissing, { ...state, inferredType: 'concrete-frame' }, locale).map((question) => {
     if (question.paramKey === 'frameDimension') {
       return {
         ...question,

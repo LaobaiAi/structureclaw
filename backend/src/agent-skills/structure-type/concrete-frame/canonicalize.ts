@@ -102,7 +102,7 @@ export function canonicalizeConcreteFramePatch(input: ConcreteFramePatchSources)
   const mergedPatch = mergeLegacyDraftPatchLlmFirst(llmPatch, naturalPatch);
   const next: DraftExtraction = {
     ...mergedPatch,
-    inferredType: 'frame',
+    inferredType: 'concrete-frame',
   };
 
   const floorLoads = mergeFloorLoadsByStory(

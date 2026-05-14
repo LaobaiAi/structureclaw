@@ -273,7 +273,7 @@ export function buildConcreteFrameDraftPatch(
   return coerceConcreteFrameDimension(
     {
       ...nextPatchWithDerivedLoads,
-      inferredType: 'frame',
+      inferredType: 'concrete-frame',
       ...(frameMaterial !== undefined && { frameMaterial }),
       ...(frameColumnSection !== undefined && { frameColumnSection }),
       ...(frameBeamSection !== undefined && { frameBeamSection }),

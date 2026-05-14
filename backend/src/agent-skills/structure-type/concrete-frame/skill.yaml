@@ -19,7 +19,7 @@ stages:
   - draft
   - analysis
   - design
-structureType: frame
+structureType: concrete-frame
 structuralTypeKeys:
   - concrete-frame
   - reinforced-concrete-frame
