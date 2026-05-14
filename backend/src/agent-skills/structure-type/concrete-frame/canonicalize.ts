@@ -72,6 +72,15 @@ export function fillConcreteFrameDimensionSpecificGeometry(patch: DraftExtractio
     next.storyCount = next.storyHeightsM.length;
   }
 
+  // Expand storyHeightsM to match storyCount when it represents a uniform value
+  // e.g., [4.2] with storyCount=3 becomes [4.2, 4.2, 4.2]
+  if (next.storyCount !== undefined && next.storyHeightsM?.length === 1) {
+    const uniformHeight = next.storyHeightsM[0];
+    if (uniformHeight !== undefined) {
+      next.storyHeightsM = Array(next.storyCount).fill(uniformHeight);
+    }
+  }
+
   if (next.frameDimension === '2d' || next.frameDimension === undefined) {
     if (!next.bayWidthsM?.length && next.bayWidthsXM?.length && !next.bayWidthsYM?.length) {
       next.bayWidthsM = [...next.bayWidthsXM];
@@ -91,6 +100,13 @@ export function fillConcreteFrameDimensionSpecificGeometry(patch: DraftExtractio
     if (next.bayCountY === undefined && next.bayWidthsYM?.length) {
       next.bayCountY = next.bayWidthsYM.length;
     }
+    // Expand bayWidthsXM to match bayCountX when it represents uniform values
+    if (next.bayCountX !== undefined && next.bayWidthsXM?.length === 1) {
+      const uniformWidth = next.bayWidthsXM[0];
+      if (uniformWidth !== undefined) {
+        next.bayWidthsXM = Array(next.bayCountX).fill(uniformWidth);
+      }
+    }
   }
 
   return next;
@@ -102,7 +118,7 @@ export function canonicalizeConcreteFramePatch(input: ConcreteFramePatchSources)
   const mergedPatch = mergeLegacyDraftPatchLlmFirst(llmPatch, naturalPatch);
   const next: DraftExtraction = {
     ...mergedPatch,
-    inferredType: 'frame',
+    inferredType: 'concrete-frame',
   };
 
   const floorLoads = mergeFloorLoadsByStory(
