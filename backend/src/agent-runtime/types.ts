@@ -24,6 +24,8 @@ export type StructuralTypeKey =
   | 'double-span-beam'
   | 'frame'
   | 'steel-frame'
+  | 'concrete-frame'
+  | 'reinforced-concrete-frame'
   | 'portal'
   | 'girder'
   | 'space-frame'
