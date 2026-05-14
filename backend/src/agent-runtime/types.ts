@@ -68,6 +68,9 @@ export interface DraftState {
   bayWidthsYM?: number[];
   floorLoads?: DraftFloorLoad[];
   frameBaseSupportType?: FrameBaseSupportType;
+  frameMaterial?: string;
+  frameColumnSection?: string;
+  frameBeamSection?: string;
   loadKN?: number;
   loadType?: DraftLoadType;
   loadPosition?: DraftLoadPosition;
@@ -99,6 +102,9 @@ export interface DraftExtraction {
   bayWidthsYM?: number[];
   floorLoads?: DraftFloorLoad[];
   frameBaseSupportType?: FrameBaseSupportType;
+  frameMaterial?: string;
+  frameColumnSection?: string;
+  frameBeamSection?: string;
   loadKN?: number;
   loadType?: DraftLoadType;
   loadPosition?: DraftLoadPosition;

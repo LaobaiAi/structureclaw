@@ -149,9 +149,10 @@ function deriveFloorLoadsFromIntensity(
     }
     
     // 检测到面荷载但暂时忽略，留到PR4统一优化
-    if (areaLoadKNm2 !== undefined) {
-      console.log('[ConcreteFrame] 检测到面荷载，暂不考虑面荷载计算。面荷载推导将在PR4统一优化。');
-    }
+    // Note: Area load detected but temporarily ignored; will be handled in PR4
+    // if (areaLoadKNm2 !== undefined) {
+    //   // Area load derivation will be unified in PR4
+    // }
   }
 
   // Derive live load KN from intensity (same area logic as dead load)

@@ -72,17 +72,23 @@ function extractFrameMaterial(message: string): string | undefined {
   if (concreteMatch) return concreteMatch[1].toUpperCase();
   const rebarMatch = message.match(/(?:钢筋|rebar|steel)\s*(?:等级|牌号|grade)?\s*[：:]*\s*([Hh][PpRr][Bb]\d+)/i);
   if (rebarMatch) return rebarMatch[1].toUpperCase();
+  // 尝试匹配独立的混凝土等级 (如 "C30")
+  const standaloneConcreteMatch = message.match(/(?:^|[^a-zA-Z0-9])([Cc]\d+)(?![0-9])/);
+  if (standaloneConcreteMatch) return standaloneConcreteMatch[1].toUpperCase();
+  // 尝试匹配独立的钢筋等级 (如 "HRB400")
+  const standaloneRebarMatch = message.match(/(?:^|[^a-zA-Z0-9])([Hh][PpRr][Bb]\d+)(?![0-9])/);
+  if (standaloneRebarMatch) return standaloneRebarMatch[1].toUpperCase();
   return undefined;
 }
 
 function extractFrameColumnSection(message: string): string | undefined {
-  const match = message.match(/(?:柱|column)\s*(?:截面|section)?\s*[：:]*\s*([\dXx×]+)/i);
+  const match = message.match(/(?:柱|column)\s*(?:截面|section)?\s*[：:]*\s*([\dXx×*]+)/i);
   if (match) return match[1].toUpperCase().replace(/×/g, 'X');
   return undefined;
 }
 
 function extractFrameBeamSection(message: string): string | undefined {
-  const match = message.match(/(?:梁|beam)\s*(?:截面|section)?\s*[：:]*\s*([\dXx×]+)/i);
+  const match = message.match(/(?:梁|beam)\s*(?:截面|section)?\s*[：:]*\s*([\dXx×*]+)/i);
   if (match) return match[1].toUpperCase().replace(/×/g, 'X');
   return undefined;
 }
