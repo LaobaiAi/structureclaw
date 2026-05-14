@@ -1,8 +1,7 @@
 import { normalizeNumber } from '../../../agent-runtime/fallback.js';
 import type { DraftExtraction, DraftState } from '../../../agent-runtime/types.js';
-import { GEOMETRY_KEYS, LOAD_BOUNDARY_KEYS } from './constants.js';
 
-function extractNaturalScalar(message: string, patterns: RegExp[]): number | undefined {
+function _extractNaturalScalar(message: string, patterns: RegExp[]): number | undefined {
   for (const pattern of patterns) {
     const match = message.match(pattern);
     if (match?.[1]) return normalizeNumber(match[1]);
@@ -10,7 +9,7 @@ function extractNaturalScalar(message: string, patterns: RegExp[]): number | und
   return undefined;
 }
 
-function extractNaturalCount(message: string, patterns: RegExp[]): number | undefined {
+function _extractNaturalCount(message: string, patterns: RegExp[]): number | undefined {
   for (const pattern of patterns) {
     const match = message.match(pattern);
     if (match?.[1]) return normalizeNumber(match[1]);
@@ -18,7 +17,7 @@ function extractNaturalCount(message: string, patterns: RegExp[]): number | unde
   return undefined;
 }
 
-function extractNaturalArray(message: string, patterns: RegExp[]): number[] | undefined {
+function _extractNaturalArray(message: string, patterns: RegExp[]): number[] | undefined {
   for (const pattern of patterns) {
     const matches = message.matchAll(pattern);
     const values: number[] = [];
@@ -32,7 +31,7 @@ function extractNaturalArray(message: string, patterns: RegExp[]): number[] | un
 }
 
 function extractStoryCount(message: string): number | undefined {
-  return extractNaturalCount(message, [
+  return _extractNaturalCount(message, [
     /(?:层数|楼层|story\s*count|story\s*number)\s*[：:]*\s*(\d+)/i,
     /(?:共|有|总共|总计)\s*(\d+)\s*(?:层|楼|story|floor)/i,
     /(\d+)\s*(?:层|楼|story|floor)/i,
@@ -40,14 +39,14 @@ function extractStoryCount(message: string): number | undefined {
 }
 
 function extractStoryHeights(message: string): number[] | undefined {
-  return extractNaturalArray(message, [
+  return _extractNaturalArray(message, [
     /(?:层高|story\s*height)\s*[：:]*\s*(\d+(?:\.\d+)?)/gi,
     /(\d+(?:\.\d+)?)\s*(?:米|m)\s*(?:层高|高|height)/gi,
   ]);
 }
 
 function extractBayCount(message: string): number | undefined {
-  return extractNaturalCount(message, [
+  return _extractNaturalCount(message, [
     /(?:跨数|bay\s*count|span\s*count)\s*[：:]*\s*(\d+)/i,
     /(?:共|有|总共|总计)\s*(\d+)\s*(?:跨|bay|span)/i,
     /(\d+)\s*(?:跨|bay|span)/i,
@@ -55,7 +54,7 @@ function extractBayCount(message: string): number | undefined {
 }
 
 function extractBayWidths(message: string): number[] | undefined {
-  return extractNaturalArray(message, [
+  return _extractNaturalArray(message, [
     /(?:跨度|bay\s*width|span\s*width)\s*[：:]*\s*(\d+(?:\.\d+)?)/gi,
     /(\d+(?:\.\d+)?)\s*(?:米|m)\s*(?:跨度|宽|width)/gi,
   ]);
