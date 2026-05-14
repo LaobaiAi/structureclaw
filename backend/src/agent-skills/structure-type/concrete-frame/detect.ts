@@ -13,13 +13,13 @@ export function detectConcreteFrameStructuralType({ message, locale, currentStat
     });
   }
   if (text.includes('concrete frame') || text.includes('混凝土框架') || text.includes('钢筋混凝土框架') || text.includes('rc frame')) {
-    return buildStructuralTypeMatch('concrete-frame', 'frame', 'concrete-frame', 'supported', locale);
+    return buildStructuralTypeMatch('concrete-frame', 'concrete-frame', 'concrete-frame', 'supported', locale);
   }
   if (text.includes('frame') || text.includes('框架')) {
     const isConcrete = text.includes('concrete') || text.includes('混凝土') || text.includes('钢筋砼') || text.includes('rc');
     const isSteel = text.includes('steel') || text.includes('钢');
     if (isConcrete && !isSteel) {
-      return buildStructuralTypeMatch('concrete-frame', 'frame', 'concrete-frame', 'supported', locale);
+      return buildStructuralTypeMatch('concrete-frame', 'concrete-frame', 'concrete-frame', 'supported', locale);
     }
   }
   // Common Chinese structural descriptions that imply a concrete frame structure:
@@ -34,15 +34,15 @@ export function detectConcreteFrameStructuralType({ message, locale, currentStat
     /\d+跨.*\d+层/.test(text) ||
     (text.includes('层') && text.includes('跨'));
   if (isConcrete && hasFrameContext) {
-    return buildStructuralTypeMatch('concrete-frame', 'frame', 'concrete-frame', 'supported', locale);
+    return buildStructuralTypeMatch('concrete-frame', 'concrete-frame', 'concrete-frame', 'supported', locale);
   }
   // Concrete grade detection
   const concreteGradePattern = /\bC(?:20|25|30|35|40|45|50|55|60|65|70|75|80)\b/i;
   if (concreteGradePattern.test(text) && hasFrameContext) {
-    return buildStructuralTypeMatch('concrete-frame', 'frame', 'concrete-frame', 'supported', locale);
+    return buildStructuralTypeMatch('concrete-frame', 'concrete-frame', 'concrete-frame', 'supported', locale);
   }
   if (currentState?.structuralTypeKey === 'concrete-frame' && currentState.supportLevel !== 'unsupported') {
-    return buildStructuralTypeMatch('concrete-frame', 'frame', 'concrete-frame', 'supported', locale);
+    return buildStructuralTypeMatch('concrete-frame', 'concrete-frame', 'concrete-frame', 'supported', locale);
   }
   return null;
 }
