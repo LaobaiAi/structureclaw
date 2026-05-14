@@ -367,6 +367,32 @@ type ConcreteFrameModel = {
   beamProps: SectionProps;
   floorLoads?: Array<{ story: number; verticalKN?: number; liveLoadKN?: number; lateralXKN?: number; lateralYKN?: number }>;
   frameBaseSupportType?: string;
+  materials?: Array<{
+    name: string;
+    grade: string;
+    category: 'concrete' | 'rebar';
+    E: number;
+    G?: number;
+    nu: number;
+    rho: number;
+    fc?: number;
+    fy?: number;
+  }>;
+  sections?: Array<{
+    name: string;
+    type: 'rectangular';
+    purpose: 'column' | 'beam';
+    width: number;
+    height: number;
+    shape: { kind: 'rectangular'; B: number; H: number };
+    properties: {
+      A: number;
+      Iy: number;
+      Iz: number;
+      J: number;
+      G: number;
+    };
+  }>;
 };
 
 /**
@@ -402,6 +428,54 @@ export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel {
   const columnProps = resolveSectionProps(frameColumnSection, concreteProps.G);
   const beamProps = resolveSectionProps(frameBeamSection, concreteProps.G);
 
+  // Build materials array matching test expectations
+  const materials: ConcreteFrameModel['materials'] = [
+    {
+      name: concreteProps.grade,
+      grade: concreteProps.grade,
+      category: 'concrete',
+      E: concreteProps.E,
+      G: concreteProps.G,
+      nu: concreteProps.nu,
+      rho: concreteProps.rho,
+      fc: concreteProps.fc,
+    },
+  ];
+
+  // Build sections array matching test expectations
+  const sections: ConcreteFrameModel['sections'] = [
+    {
+      name: columnProps.name,
+      type: 'rectangular',
+      purpose: 'column',
+      width: columnProps.width ?? 0,
+      height: columnProps.height ?? 0,
+      shape: { kind: 'rectangular', B: columnProps.width ?? 0, H: columnProps.height ?? 0 },
+      properties: {
+        A: columnProps.A,
+        Iy: columnProps.Iy,
+        Iz: columnProps.Iz,
+        J: columnProps.J,
+        G: columnProps.G,
+      },
+    },
+    {
+      name: beamProps.name,
+      type: 'rectangular',
+      purpose: 'beam',
+      width: beamProps.width ?? 0,
+      height: beamProps.height ?? 0,
+      shape: { kind: 'rectangular', B: beamProps.width ?? 0, H: beamProps.height ?? 0 },
+      properties: {
+        A: beamProps.A,
+        Iy: beamProps.Iy,
+        Iz: beamProps.Iz,
+        J: beamProps.J,
+        G: beamProps.G,
+      },
+    },
+  ];
+
   return {
     storyCount,
     bayCount,
@@ -417,5 +491,7 @@ export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel {
     beamProps,
     floorLoads: state.floorLoads,
     frameBaseSupportType,
+    materials,
+    sections,
   };
 }
