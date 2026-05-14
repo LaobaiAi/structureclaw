@@ -18,7 +18,7 @@ describe('concrete-frame handler composed modules', () => {
     });
 
     expect(match?.skillId).toBe('concrete-frame');
-    expect(match?.mappedType).toBe('concrete-frame');
+    expect(match?.mappedType).toBe('frame');
   });
 
   test('does not treat material and sections as critical blockers', () => {
@@ -98,7 +98,7 @@ describe('concrete-frame handler composed modules', () => {
       },
       structuralTypeMatch: {
         key: 'concrete-frame',
-        mappedType: 'concrete-frame',
+        mappedType: 'frame',
         skillId: 'concrete-frame',
         supportLevel: 'supported',
       },
