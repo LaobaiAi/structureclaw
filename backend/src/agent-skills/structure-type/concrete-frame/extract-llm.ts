@@ -63,7 +63,7 @@ function sumPositive(values: number[] | undefined): number | undefined {
   return Number.isFinite(total) && total > 0 ? total : undefined;
 }
 
-function hasSingleBayHint(message: string): boolean {
+function _hasSingleBayHint(message: string): boolean {
   return /(?:single[-\s]?bay|单跨|一跨|1\s*跨)/i.test(message);
 }
 
@@ -142,7 +142,7 @@ function deriveFloorLoadsFromIntensity(
   } else {
     const bayWidths2d = patch.bayWidthsM ?? patch.bayWidthsXM;
     const totalSpan2d = sumPositive(bayWidths2d);
-    const bayCount2d = patch.bayCount ?? bayWidths2d?.length ?? patch.bayCountX ?? patch.bayWidthsXM?.length;
+    const _bayCount2d = patch.bayCount ?? bayWidths2d?.length ?? patch.bayCountX ?? patch.bayWidthsXM?.length;
 
     if (lineLoadKNm !== undefined && totalSpan2d !== undefined) {
       verticalKN = lineLoadKNm * totalSpan2d;
