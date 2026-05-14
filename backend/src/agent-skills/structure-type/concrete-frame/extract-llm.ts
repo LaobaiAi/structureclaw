@@ -148,11 +148,11 @@ function deriveFloorLoadsFromIntensity(
       verticalKN = lineLoadKNm * totalSpan2d;
     }
     
-    // 检测到面荷载但暂时忽略，留到PR4统一优化
-    // Note: Area load detected but temporarily ignored; will be handled in PR4
-    // if (areaLoadKNm2 !== undefined) {
-    //   // Area load derivation will be unified in PR4
-    // }
+    // For 2D frames with area load, assume square bay (transverse width = bay width)
+    // This gives: verticalKN = areaLoadKNm2 * bayWidth * bayWidth
+    if (areaLoadKNm2 !== undefined && totalSpan2d !== undefined) {
+      verticalKN = areaLoadKNm2 * totalSpan2d * totalSpan2d;
+    }
   }
 
   // Derive live load KN from intensity (same area logic as dead load)
@@ -273,7 +273,7 @@ export function buildConcreteFrameDraftPatch(
   return coerceConcreteFrameDimension(
     {
       ...nextPatchWithDerivedLoads,
-      inferredType: 'frame',
+      inferredType: 'concrete-frame',
       ...(frameMaterial !== undefined && { frameMaterial }),
       ...(frameColumnSection !== undefined && { frameColumnSection }),
       ...(frameBeamSection !== undefined && { frameBeamSection }),
