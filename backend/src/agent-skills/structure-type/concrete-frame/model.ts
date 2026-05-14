@@ -380,9 +380,21 @@ export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel {
   const storyHeightsM = state.storyHeightsM || Array(storyCount).fill(3.0);
   const bayWidthsM = state.bayWidthsM || Array(bayCount).fill(6.0);
   const frameDimension = state.frameDimension || '2d';
-  const frameMaterial = state.frameMaterial || 'C30';
-  const frameColumnSection = state.frameColumnSection || getDefaultColumnSection(storyCount);
-  const frameBeamSection = state.frameBeamSection || getDefaultBeamSection(storyCount);
+  
+  // Use type assertions like in frame/model.ts
+  const rawFrameMaterial = (state.frameMaterial as string | undefined);
+  
+  // Validate that frameMaterial is a concrete grade, not a rebar grade
+  // If it's a rebar grade or invalid, fall back to default C30
+  let frameMaterial: string;
+  if (rawFrameMaterial && isValidConcreteGrade(rawFrameMaterial)) {
+    frameMaterial = rawFrameMaterial;
+  } else {
+    frameMaterial = 'C30';
+  }
+  
+  const frameColumnSection = (state.frameColumnSection as string | undefined) || getDefaultColumnSection(storyCount);
+  const frameBeamSection = (state.frameBeamSection as string | undefined) || getDefaultBeamSection(storyCount);
   const frameBaseSupportType = state.frameBaseSupportType || 'fixed';
 
   const concreteProps = resolveConcreteMaterialProps(frameMaterial);
