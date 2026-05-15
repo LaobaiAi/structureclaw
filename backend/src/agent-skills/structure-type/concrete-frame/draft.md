@@ -33,7 +33,8 @@ A `DraftExtraction` JSON object with the following optional keys (see `constants
 ### Materials & Sections
 | Key | Type | Example | Notes |
 |-----|------|---------|-------|
-| `frameMaterial` | `string` | `"C30"` | Concrete grade (C20–C80). Default `"C30"`. |
+| `frameConcreteGrade` | `string` | `"C30"` | Concrete grade (C20–C80). Default `"C30"`. |
+| `frameRebarGrade` | `string` | `"HRB400"` | Rebar grade (HPB300, HRB400, HRB500). Default `"HRB400"`. |
 | `frameColumnSection` | `string` | `"400X400"` | Column cross‑section description. See section parsing below. |
 | `frameBeamSection` | `"string"` | `"300X600"` | Beam cross‑section description. |
 
@@ -54,9 +55,9 @@ Concrete frame sections are described as rectangular cross‑sections:
 
 ## Examples
 1. "A 2‑story 1‑bay concrete frame, story heights 4 m, bay width 8 m, concrete C35, rebar HRB400, fixed base."
-   → `{ frameDimension: "2d", storyCount: 2, bayCount: 1, storyHeightsM: [4, 4], bayWidthsM: [8], frameMaterial: "C35", frameBaseSupportType: "fixed" }`
+   → `{ frameDimension: "2d", storyCount: 2, bayCount: 1, storyHeightsM: [4, 4], bayWidthsM: [8], frameConcreteGrade: "C35", frameRebarGrade: "HRB400", frameBaseSupportType: "fixed" }`
 2. "混凝土框架，5层4跨，层高3.6 m，跨度6 m，混凝土C40，钢筋HRB500，固接。"
-   → `{ frameDimension: "2d", storyCount: 5, bayCount: 4, storyHeightsM: [3.6,3.6,3.6,3.6,3.6], bayWidthsM: [6,6,6,6], frameMaterial: "C40", frameBaseSupportType: "fixed" }`
+   → `{ frameDimension: "2d", storyCount: 5, bayCount: 4, storyHeightsM: [3.6,3.6,3.6,3.6,3.6], bayWidthsM: [6,6,6,6], frameConcreteGrade: "C40", frameRebarGrade: "HRB500", frameBaseSupportType: "fixed" }`
 
 ## Missing Values
 If a required key (see `REQUIRED_KEYS` in `constants.ts`) is missing after extraction, the skill will generate interactive questions to fill the gap.

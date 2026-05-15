@@ -251,13 +251,22 @@ function extractFrameDimension(message: string): '2d' | '3d' | undefined {
   return undefined;
 }
 
-function extractFrameMaterial(message: string): string | undefined {
+// M1: Separate concrete and rebar grade extraction to avoid losing information
+function extractConcreteGrade(message: string): string | undefined {
+  // Match explicit concrete grade like "混凝土C30" or "concrete grade C30"
   const concreteMatch = message.match(/(?:混凝土|concrete)\s*(?:等级|标号|grade)?\s*[：:]*\s*([Cc]\d+)/i);
   if (concreteMatch) return concreteMatch[1].toUpperCase();
-  const rebarMatch = message.match(/(?:钢筋|rebar|steel)\s*(?:等级|牌号|grade)?\s*[：:]*\s*([Hh][PpRr][Bb]\d+)/i);
-  if (rebarMatch) return rebarMatch[1].toUpperCase();
+  // Match standalone concrete grade like "C30" (not followed by more digits)
   const standaloneConcreteMatch = message.match(/(?:^|[^a-zA-Z0-9])([Cc]\d+)(?![0-9])/);
   if (standaloneConcreteMatch) return standaloneConcreteMatch[1].toUpperCase();
+  return undefined;
+}
+
+function extractRebarGrade(message: string): string | undefined {
+  // Match explicit rebar grade like "钢筋HRB400" or "rebar HRB400"
+  const rebarMatch = message.match(/(?:钢筋|rebar|steel)\s*(?:等级|牌号|grade)?\s*[：:]*\s*([Hh][PpRr][Bb]\d+)/i);
+  if (rebarMatch) return rebarMatch[1].toUpperCase();
+  // Match standalone rebar grade like "HRB400" (not followed by more digits)
   const standaloneRebarMatch = message.match(/(?:^|[^a-zA-Z0-9])([Hh][PpRr][Bb]\d+)(?![0-9])/);
   if (standaloneRebarMatch) return standaloneRebarMatch[1].toUpperCase();
   return undefined;
@@ -288,7 +297,8 @@ export function normalizeConcreteFrameNaturalPatch(
   let bayWidthsXM = extractBayWidthsX(message) ?? existingState?.bayWidthsXM;
   let bayWidthsYM = extractBayWidthsY(message) ?? existingState?.bayWidthsYM;
   const frameDimension = extractFrameDimension(message) ?? existingState?.frameDimension;
-  const frameMaterial = extractFrameMaterial(message) ?? existingState?.frameMaterial as string | undefined;
+  const frameConcreteGrade = extractConcreteGrade(message) ?? existingState?.frameConcreteGrade as string | undefined;
+  const frameRebarGrade = extractRebarGrade(message) ?? existingState?.frameRebarGrade as string | undefined;
   const frameColumnSection = extractFrameColumnSection(message) ?? existingState?.frameColumnSection as string | undefined;
   const frameBeamSection = extractFrameBeamSection(message) ?? existingState?.frameBeamSection as string | undefined;
 
@@ -329,7 +339,8 @@ export function normalizeConcreteFrameNaturalPatch(
     ...(bayWidthsXM !== undefined && { bayWidthsXM }),
     ...(bayWidthsYM !== undefined && { bayWidthsYM }),
     ...(frameDimension !== undefined && { frameDimension }),
-    ...(frameMaterial !== undefined && { frameMaterial }),
+    ...(frameConcreteGrade !== undefined && { frameConcreteGrade }),
+    ...(frameRebarGrade !== undefined && { frameRebarGrade }),
     ...(frameColumnSection !== undefined && { frameColumnSection }),
     ...(frameBeamSection !== undefined && { frameBeamSection }),
   };

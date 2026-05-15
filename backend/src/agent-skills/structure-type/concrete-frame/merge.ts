@@ -12,7 +12,9 @@ export function mergeConcreteFrameState(existing: DraftState | undefined, patch:
 
   return {
     ...domainMerged,
-    frameMaterial: (patch.frameMaterial as string | undefined) ?? (existing?.frameMaterial as string | undefined),
+    // M1: Separate concrete and rebar grade
+    frameConcreteGrade: (patch.frameConcreteGrade as string | undefined) ?? (existing?.frameConcreteGrade as string | undefined),
+    frameRebarGrade: (patch.frameRebarGrade as string | undefined) ?? (existing?.frameRebarGrade as string | undefined),
     frameColumnSection: (patch.frameColumnSection as string | undefined) ?? (existing?.frameColumnSection as string | undefined),
     frameBeamSection: (patch.frameBeamSection as string | undefined) ?? (existing?.frameBeamSection as string | undefined),
   };

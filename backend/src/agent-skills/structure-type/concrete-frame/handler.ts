@@ -26,7 +26,9 @@ export const handler: SkillHandler = {
     );
     return {
       ...base,
-      ...(typeof values.frameMaterial === 'string' && { frameMaterial: normalizeConcreteGrade(values.frameMaterial) }),
+      // M1: Separate concrete and rebar grade
+      ...(typeof values.frameConcreteGrade === 'string' && { frameConcreteGrade: normalizeConcreteGrade(values.frameConcreteGrade) }),
+      ...(typeof values.frameRebarGrade === 'string' && { frameRebarGrade: normalizeConcreteGrade(values.frameRebarGrade) }),
       ...(typeof values.frameColumnSection === 'string' && { frameColumnSection: normalizeSectionName(values.frameColumnSection) }),
       ...(typeof values.frameBeamSection === 'string' && { frameBeamSection: normalizeSectionName(values.frameBeamSection) }),
     };
@@ -61,7 +63,12 @@ export const handler: SkillHandler = {
   },
 
   buildModel(state) {
-    return buildConcreteFrameModel(state);
+    try {
+      return buildConcreteFrameModel(state);
+    } catch (error) {
+      console.error('buildConcreteFrameModel failed:', error);
+      return undefined;
+    }
   },
 
   resolveStage(missingKeys) {

@@ -318,7 +318,8 @@ type ConcreteFrameModel = {
   storyHeightsM: number[];
   bayWidthsM: number[];
   frameDimension: '2d' | '3d';
-  frameMaterial: string;
+  frameConcreteGrade: string;
+  frameRebarGrade: string;
   frameColumnSection: string;
   frameBeamSection: string;
   concreteProps: ConcreteMaterialProps;
@@ -383,25 +384,33 @@ export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel |
   }
 
   const frameDimension = state.frameDimension || '2d';
-  
-  // Use type assertions like in frame/model.ts
-  const rawFrameMaterial = (state.frameMaterial as string | undefined);
-  
-  // Validate that frameMaterial is a concrete grade, not a rebar grade
-  // If it's a rebar grade or invalid, fall back to default C30
-  let frameMaterial: string;
-  if (rawFrameMaterial && isValidConcreteGrade(rawFrameMaterial)) {
-    frameMaterial = rawFrameMaterial;
+
+  // M1: Separate concrete and rebar grade handling
+  const rawFrameConcreteGrade = (state.frameConcreteGrade as string | undefined);
+  const rawFrameRebarGrade = (state.frameRebarGrade as string | undefined);
+
+  // Validate concrete grade, fall back to C30 if invalid
+  let frameConcreteGrade: string;
+  if (rawFrameConcreteGrade && isValidConcreteGrade(rawFrameConcreteGrade)) {
+    frameConcreteGrade = rawFrameConcreteGrade;
   } else {
-    frameMaterial = 'C30';
+    frameConcreteGrade = 'C30';
   }
-  
+
+  // Validate rebar grade, fall back to HRB400 if invalid
+  let frameRebarGrade: string;
+  if (rawFrameRebarGrade && isValidRebarGrade(rawFrameRebarGrade)) {
+    frameRebarGrade = rawFrameRebarGrade;
+  } else {
+    frameRebarGrade = 'HRB400';
+  }
+
   const frameColumnSection = (state.frameColumnSection as string | undefined) || getDefaultColumnSection(storyCount);
   const frameBeamSection = (state.frameBeamSection as string | undefined) || getDefaultBeamSection(storyCount);
   const frameBaseSupportType = state.frameBaseSupportType || 'fixed';
 
-  const concreteProps = resolveConcreteMaterialProps(frameMaterial);
-  const rebarProps = resolveRebarMaterialProps('HRB400'); // TODO: make rebar grade configurable
+  const concreteProps = resolveConcreteMaterialProps(frameConcreteGrade);
+  const rebarProps = resolveRebarMaterialProps(frameRebarGrade);
   const columnProps = resolveSectionProps(frameColumnSection, concreteProps.G);
   const beamProps = resolveSectionProps(frameBeamSection, concreteProps.G);
 
@@ -459,7 +468,8 @@ export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel |
     storyHeightsM,
     bayWidthsM,
     frameDimension,
-    frameMaterial,
+    frameConcreteGrade,
+    frameRebarGrade,
     frameColumnSection,
     frameBeamSection,
     concreteProps,

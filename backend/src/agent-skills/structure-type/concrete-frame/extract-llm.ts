@@ -205,8 +205,12 @@ export function buildConcreteFramePatchFromLlm(
   const frameDimension = normalized.frameDimension
     ?? (normalized.bayCountY !== undefined || normalized.bayWidthsYM !== undefined || lateralYKN !== undefined ? '3d' : undefined);
 
-  const frameMaterial = typeof rawPatch?.frameMaterial === 'string'
-    ? normalizeConcreteGrade(rawPatch.frameMaterial)
+  // M1: Separate concrete and rebar grade extraction
+  const frameConcreteGrade = typeof rawPatch?.frameConcreteGrade === 'string'
+    ? normalizeConcreteGrade(rawPatch.frameConcreteGrade)
+    : undefined;
+  const frameRebarGrade = typeof rawPatch?.frameRebarGrade === 'string'
+    ? normalizeConcreteGrade(rawPatch.frameRebarGrade) // Reuse normalize for consistency
     : undefined;
   const frameColumnSection = typeof rawPatch?.frameColumnSection === 'string'
     ? normalizeSectionName(rawPatch.frameColumnSection)
@@ -223,7 +227,8 @@ export function buildConcreteFramePatchFromLlm(
     bayWidthsXM: normalized.bayWidthsXM ?? repeatScalar(bayCountX, bayWidthXScalar ?? bayWidthScalar),
     bayWidthsYM: normalized.bayWidthsYM ?? repeatScalar(bayCountY, bayWidthYScalar ?? bayWidthScalar),
     floorLoads: normalized.floorLoads ?? buildUniformFloorLoads(storyCount, verticalLoadKN, liveLoadKN, lateralXKN, frameDimension === '3d' ? lateralYKN : undefined),
-    ...(frameMaterial !== undefined && { frameMaterial }),
+    ...(frameConcreteGrade !== undefined && { frameConcreteGrade }),
+    ...(frameRebarGrade !== undefined && { frameRebarGrade }),
     ...(frameColumnSection !== undefined && { frameColumnSection }),
     ...(frameBeamSection !== undefined && { frameBeamSection }),
   };
@@ -263,8 +268,11 @@ export function buildConcreteFrameDraftPatch(
   });
   const nextPatchWithDerivedLoads = deriveFloorLoadsFromIntensity(message, nextPatch);
 
-  const frameMaterial = (normalizedLlmPatch.frameMaterial as string | undefined)
-    ?? (rawNaturalPatch.frameMaterial as string | undefined);
+  // M1: Separate concrete and rebar grade extraction
+  const frameConcreteGrade = (normalizedLlmPatch.frameConcreteGrade as string | undefined)
+    ?? (rawNaturalPatch.frameConcreteGrade as string | undefined);
+  const frameRebarGrade = (normalizedLlmPatch.frameRebarGrade as string | undefined)
+    ?? (rawNaturalPatch.frameRebarGrade as string | undefined);
   const frameColumnSection = (normalizedLlmPatch.frameColumnSection as string | undefined)
     ?? (rawNaturalPatch.frameColumnSection as string | undefined);
   const frameBeamSection = (normalizedLlmPatch.frameBeamSection as string | undefined)
@@ -274,7 +282,8 @@ export function buildConcreteFrameDraftPatch(
     {
       ...nextPatchWithDerivedLoads,
       inferredType: 'frame',
-      ...(frameMaterial !== undefined && { frameMaterial }),
+      ...(frameConcreteGrade !== undefined && { frameConcreteGrade }),
+      ...(frameRebarGrade !== undefined && { frameRebarGrade }),
       ...(frameColumnSection !== undefined && { frameColumnSection }),
       ...(frameBeamSection !== undefined && { frameBeamSection }),
     },

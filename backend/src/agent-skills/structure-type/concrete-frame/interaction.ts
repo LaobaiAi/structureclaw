@@ -43,10 +43,14 @@ function buildConcreteFrameDefaultReason(paramKey: string, locale: AppLocale, st
       return locale === 'zh'
         ? '框架柱脚默认采用固定支座，便于获得更稳健的初始刚度评估。'
         : 'Default frame base support to fixed to obtain a stable initial stiffness assessment.';
-    case 'frameMaterial':
+    case 'frameConcreteGrade':
       return locale === 'zh'
-        ? '默认采用 C30 混凝土；若输入为钢筋混凝土框架，也可使用 HRB400 等钢筋等级。'
-        : 'Default to C30 concrete; for reinforced concrete frames, grades such as HRB400 are also supported.';
+        ? '默认采用 C30 混凝土。'
+        : 'Default to C30 concrete.';
+    case 'frameRebarGrade':
+      return locale === 'zh'
+        ? '默认采用 HRB400 钢筋。'
+        : 'Default to HRB400 rebar.';
     case 'frameColumnSection':
       return locale === 'zh'
         ? `根据 ${storyCount} 层框架规模，建议柱截面采用 ${getDefaultColumnSection(storyCount)}（矩形截面）。`
@@ -73,7 +77,8 @@ export function computeConcreteFrameMissing(state: DraftState, phase: 'interacti
 export function mapConcreteFrameLabels(keys: string[], locale: AppLocale): string[] {
   return keys.map((key) => {
     switch (key) {
-      case 'frameMaterial': return locale === 'zh' ? '材料牌号' : 'Material grade';
+      case 'frameConcreteGrade': return locale === 'zh' ? '混凝土等级' : 'Concrete grade';
+      case 'frameRebarGrade': return locale === 'zh' ? '钢筋等级' : 'Rebar grade';
       case 'frameColumnSection': return locale === 'zh' ? '柱截面' : 'Column section';
       case 'frameBeamSection': return locale === 'zh' ? '梁截面' : 'Beam section';
       default: return buildLegacyLabels([key], locale)[0];
@@ -113,11 +118,19 @@ export function buildConcreteFrameDefaultProposals(
       reason: buildConcreteFrameDefaultReason('frameBaseSupportType', locale, state),
     });
   }
-  if (keys.includes('frameMaterial')) {
-    next.set('frameMaterial', {
-      paramKey: 'frameMaterial',
+  // M1: Separate concrete and rebar grade
+  if (keys.includes('frameConcreteGrade')) {
+    next.set('frameConcreteGrade', {
+      paramKey: 'frameConcreteGrade',
       value: 'C30',
-      reason: buildConcreteFrameDefaultReason('frameMaterial', locale, state),
+      reason: buildConcreteFrameDefaultReason('frameConcreteGrade', locale, state),
+    });
+  }
+  if (keys.includes('frameRebarGrade')) {
+    next.set('frameRebarGrade', {
+      paramKey: 'frameRebarGrade',
+      value: 'HRB400',
+      reason: buildConcreteFrameDefaultReason('frameRebarGrade', locale, state),
     });
   }
   if (keys.includes('frameColumnSection')) {
@@ -177,16 +190,29 @@ export function buildConcreteFrameQuestions(
           : `Please confirm per-story total load (kN). This is the total load on each story, and it will be distributed equally to all nodes on that floor. ${loadHint}`,
       };
     }
-    if (question.paramKey === 'frameMaterial') {
+    // M1: Separate concrete and rebar grade questions
+    if (question.paramKey === 'frameConcreteGrade') {
       return {
-        paramKey: 'frameMaterial',
-        label: locale === 'zh' ? '材料牌号' : 'Material grade',
+        paramKey: 'frameConcreteGrade',
+        label: locale === 'zh' ? '混凝土等级' : 'Concrete grade',
         question: locale === 'zh'
-          ? '请确认材料牌号（如 C30、C35、C40 混凝土，或 HRB400、HRB500 钢筋）。钢筋混凝土框架通常采用 C30 混凝土和 HRB400 钢筋。'
-          : 'Please confirm the material grade (e.g. C30, C35, C40 concrete, or HRB400, HRB500 rebar). C30 concrete and HRB400 rebar are common for reinforced concrete frames.',
+          ? '请确认混凝土等级（如 C30、C35、C40）。'
+          : 'Please confirm the concrete grade (e.g. C30, C35, C40).',
         required: true,
-        critical: criticalMissing.includes('frameMaterial'),
+        critical: criticalMissing.includes('frameConcreteGrade'),
         suggestedValue: 'C30',
+      };
+    }
+    if (question.paramKey === 'frameRebarGrade') {
+      return {
+        paramKey: 'frameRebarGrade',
+        label: locale === 'zh' ? '钢筋等级' : 'Rebar grade',
+        question: locale === 'zh'
+          ? '请确认钢筋等级（如 HRB400、HRB500）。'
+          : 'Please confirm the rebar grade (e.g. HRB400, HRB500).',
+        required: true,
+        critical: criticalMissing.includes('frameRebarGrade'),
+        suggestedValue: 'HRB400',
       };
     }
     if (question.paramKey === 'frameColumnSection') {
@@ -238,7 +264,7 @@ export function buildConcreteFrameReportNarrative(input: SkillReportNarrativeInp
 }
 
 export function resolveConcreteFrameStage(missingKeys: string[]): 'intent' | 'model' | 'loads' | 'analysis' | 'code_check' | 'report' {
-  return resolveLegacyStructuralStage(
-    missingKeys.filter((key) => !FRAME_MATERIAL_KEYS.includes(key as typeof FRAME_MATERIAL_KEYS[number])),
-  );
+  // M4: Remove unnecessary filter - FRAME_MATERIAL_KEYS are not in the geometry key list
+  // so filtering them has no effect on the stage resolution
+  return resolveLegacyStructuralStage(missingKeys);
 }

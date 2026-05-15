@@ -66,50 +66,79 @@ export function resolveConcreteFrameDimension(
 }
 
 export function fillConcreteFrameDimensionSpecificGeometry(patch: DraftExtraction): DraftExtraction {
-  const next: DraftExtraction = { ...patch };
+  // Track modified fields using local variables, reconstruct at return (M5: immutable style)
+  let { storyCount, storyHeightsM, bayWidthsM } = patch;
+  let { bayCount, bayCountX, bayCountY, bayWidthsXM, bayWidthsYM } = patch;
+  let { frameDimension } = patch;
 
-  if (next.storyCount === undefined && next.storyHeightsM?.length) {
-    next.storyCount = next.storyHeightsM.length;
+  if (storyCount === undefined && storyHeightsM?.length) {
+    storyCount = storyHeightsM.length;
   }
 
   // Expand storyHeightsM to match storyCount when it represents a uniform value
   // e.g., [4.2] with storyCount=3 becomes [4.2, 4.2, 4.2]
-  if (next.storyCount !== undefined && next.storyHeightsM?.length === 1) {
-    const uniformHeight = next.storyHeightsM[0];
+  if (storyCount !== undefined && storyHeightsM?.length === 1) {
+    const uniformHeight = storyHeightsM[0];
     if (uniformHeight !== undefined) {
-      next.storyHeightsM = Array(next.storyCount).fill(uniformHeight);
+      storyHeightsM = Array(storyCount).fill(uniformHeight);
     }
   }
 
-  if (next.frameDimension === '2d' || next.frameDimension === undefined) {
-    if (!next.bayWidthsM?.length && next.bayWidthsXM?.length && !next.bayWidthsYM?.length) {
-      next.bayWidthsM = [...next.bayWidthsXM];
+  if (frameDimension === '2d' || frameDimension === undefined) {
+    if (!bayWidthsM?.length && bayWidthsXM?.length && !bayWidthsYM?.length) {
+      bayWidthsM = [...bayWidthsXM];
     }
-    if (next.bayCount === undefined) {
-      next.bayCount = next.bayWidthsM?.length
-        ?? next.bayCountX
-        ?? next.bayWidthsXM?.length;
+    if (bayCount === undefined) {
+      bayCount = bayWidthsM?.length
+        ?? bayCountX
+        ?? bayWidthsXM?.length;
     }
-    if (next.frameDimension === '2d') return next;
+    if (frameDimension === '2d') {
+      return { ...patch, storyCount, storyHeightsM, bayWidthsM, bayCount };
+    }
   }
 
-  if (next.frameDimension === '3d') {
-    if (next.bayCountX === undefined && next.bayWidthsXM?.length) {
-      next.bayCountX = next.bayWidthsXM.length;
+  if (frameDimension === '3d') {
+    // M2: When user provides directionless bayWidthsM in 3D mode, copy to both directions
+    if (bayWidthsM?.length && !bayWidthsXM?.length && !bayWidthsYM?.length) {
+      bayWidthsXM = [...bayWidthsM];
+      bayWidthsYM = [...bayWidthsM];
     }
-    if (next.bayCountY === undefined && next.bayWidthsYM?.length) {
-      next.bayCountY = next.bayWidthsYM.length;
+    if (bayCountX === undefined && bayWidthsXM?.length) {
+      bayCountX = bayWidthsXM.length;
+    }
+    if (bayCountY === undefined && bayWidthsYM?.length) {
+      bayCountY = bayWidthsYM.length;
     }
     // Expand bayWidthsXM to match bayCountX when it represents uniform values
-    if (next.bayCountX !== undefined && next.bayWidthsXM?.length === 1) {
-      const uniformWidth = next.bayWidthsXM[0];
+    if (bayCountX !== undefined && bayWidthsXM?.length === 1) {
+      const uniformWidth = bayWidthsXM[0];
       if (uniformWidth !== undefined) {
-        next.bayWidthsXM = Array(next.bayCountX).fill(uniformWidth);
+        bayWidthsXM = Array(bayCountX).fill(uniformWidth);
+      }
+    }
+    // Expand bayWidthsYM to match bayCountY when it represents uniform values
+    if (bayCountY !== undefined && bayWidthsYM?.length === 1) {
+      const uniformWidth = bayWidthsYM[0];
+      if (uniformWidth !== undefined) {
+        bayWidthsYM = Array(bayCountY).fill(uniformWidth);
       }
     }
   }
 
-  return next;
+  // Reconstruct with spread to ensure immutability
+  return {
+    ...patch,
+    storyCount,
+    storyHeightsM,
+    bayWidthsM,
+    bayCount,
+    bayCountX,
+    bayCountY,
+    bayWidthsXM,
+    bayWidthsYM,
+    frameDimension,
+  };
 }
 
 export function canonicalizeConcreteFramePatch(input: ConcreteFramePatchSources): DraftExtraction {

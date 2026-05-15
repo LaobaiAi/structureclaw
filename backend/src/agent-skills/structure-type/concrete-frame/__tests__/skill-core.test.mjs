@@ -128,14 +128,14 @@ describe('concrete-frame canonicalize core contract', () => {
       bayCount: 2,
       storyHeightM: 3,
       bayWidthM: 6,
-      frameMaterial: 'C30',
+      frameConcreteGrade: 'C30',
       frameColumnSection: '500X500',
       frameBeamSection: '300X600',
     }, undefined);
 
     expect(patch.storyHeightsM).toEqual([3, 3]);
     expect(patch.bayWidthsM).toEqual([6, 6]);
-    expect(patch.frameMaterial).toBe('C30');
+    expect(patch.frameConcreteGrade).toBe('C30');
     expect(patch.frameColumnSection).toBe('500X500');
     expect(patch.frameBeamSection).toBe('300X600');
   });
@@ -146,7 +146,7 @@ describe('concrete-frame canonicalize core contract', () => {
       undefined,
     );
 
-    expect(patch.frameMaterial).toBe('C30');
+    expect(patch.frameConcreteGrade).toBe('C30');
     expect(patch.frameColumnSection).toBe('400X400');
     expect(patch.frameBeamSection).toBe('250X600');
   });
@@ -165,7 +165,8 @@ describe('concrete-frame canonicalize core contract', () => {
         { story: 2, verticalKN: 100 },
       ],
       frameBaseSupportType: 'fixed',
-      frameMaterial: 'C30',
+      frameConcreteGrade: 'C30',
+      frameRebarGrade: 'HRB400',
       frameColumnSection: '400X400',
       frameBeamSection: '250X600',
     });

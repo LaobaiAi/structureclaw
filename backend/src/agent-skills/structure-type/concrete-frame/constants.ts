@@ -25,4 +25,4 @@ export const REQUIRED_KEYS = [
   'floorLoads',
 ] as const;
 
-export const FRAME_MATERIAL_KEYS = ['frameMaterial', 'frameColumnSection', 'frameBeamSection'] as const;
+export const FRAME_MATERIAL_KEYS = ['frameConcreteGrade', 'frameRebarGrade', 'frameColumnSection', 'frameBeamSection'] as const;
