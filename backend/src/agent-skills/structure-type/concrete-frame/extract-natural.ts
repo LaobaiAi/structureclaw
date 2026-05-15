@@ -1,25 +1,71 @@
-import { normalizeNumber } from '../../../agent-runtime/fallback.js';
+import { normalizeNumber, parseChineseNumber } from '../../../agent-runtime/fallback.js';
 import type { DraftExtraction, DraftState } from '../../../agent-runtime/types.js';
 
-// Pattern to match both Arabic and Chinese digits: 0-9 or 零一二三四五六七八九十
-const DIGIT_PATTERN = '[零一二三四五六七八九十0-9]+';
+// Enhanced digit pattern for explicit structural context
+// Requires specific leading context to avoid false matches like "其中一层"
+const DIGIT_PATTERN = '[零一二三四五六七八九十百千万两廿0-9]+';
 
+// Leading context that indicates structural description (not casual mention)
+// Covers: sentence start, punctuation, or specific aggregate keywords
+// NOTE: "有" is excluded because it's ambiguous (e.g., "有一层漏了" ≠ "有1层")
+// NOTE: "一共" is kept as it's a clear structural indicator
+const STRUCTURAL_LEADING_PATTERN = '(?:^|[，。；！？、\\s]|共|包含|总计|一共|为|总)';
+
+// Chinese number-only pattern for specialized parsing
+const CHINESE_NUMBER_PATTERN = '[零一二三四五六七八九十百千万两廿]+';
+
+/**
+ * Parse a localized number string (Arabic or Chinese).
+ * Returns number only if the string is purely numeric.
+ */
+function parseLocalizedNumber(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  // Try Arabic number first
+  const parsed = Number.parseFloat(trimmed);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  // Try Chinese numeral
+  const chinese = parseChineseNumber(trimmed);
+  if (chinese !== undefined && chinese > 0) {
+    return chinese;
+  }
+  return undefined;
+}
+
+/**
+ * Extract a positive integer with structural context validation.
+ * Only matches numbers that appear in explicit structural context.
+ */
+function extractStructuredCount(text: string, patterns: RegExp[]): number | undefined {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const value = parseLocalizedNumber(match[1]);
+      if (value !== undefined) return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Extract a scalar value (allows decimals).
+ */
 function _extractNaturalScalar(message: string, patterns: RegExp[]): number | undefined {
   for (const pattern of patterns) {
     const match = message.match(pattern);
-    if (match?.[1]) return normalizeNumber(match[1]);
+    if (match?.[1]) {
+      const value = normalizeNumber(match[1]);
+      if (value !== undefined && value > 0) return value;
+    }
   }
   return undefined;
 }
 
-function _extractNaturalCount(message: string, patterns: RegExp[]): number | undefined {
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    if (match?.[1]) return normalizeNumber(match[1]);
-  }
-  return undefined;
-}
-
+/**
+ * Extract an array of values.
+ */
 function _extractNaturalArray(message: string, patterns: RegExp[]): number[] | undefined {
   for (const pattern of patterns) {
     const matches = message.matchAll(pattern);
@@ -33,42 +79,43 @@ function _extractNaturalArray(message: string, patterns: RegExp[]): number[] | u
   return undefined;
 }
 
+/**
+ * Extract story count with strict structural context.
+ * Avoids false matches like "其中一层需要加固".
+ */
 function extractStoryCount(message: string): number | undefined {
-  return _extractNaturalCount(message, [
-    new RegExp(`(?:层数|楼层|story\\s*count|story\\s*number|stories?)\\s*[：:]*\\s*(${DIGIT_PATTERN})`, 'i'),
-    new RegExp(`(?:共|有|总共|总计)\\s*(${DIGIT_PATTERN})\\s*(?:层|楼|stories?)`, 'i'),
-    new RegExp(`(${DIGIT_PATTERN})\\s*(?:层|楼|stories?)`, 'i'),
-  ]);
+  // Pattern 1: Explicit keyword followed by number
+  const pattern1 = new RegExp(
+    `(?:层数|楼层|story\\s*count|story\\s*number|stories?)\\s*[：:]*\\s*(${DIGIT_PATTERN})`,
+    'i'
+  );
+  
+  // Pattern 2: Structural leading context before number
+  // "共三层", "一共三层", "总三层", "为三层", etc.
+  const pattern2 = new RegExp(
+    `${STRUCTURAL_LEADING_PATTERN}(${DIGIT_PATTERN})\\s*(?:层|楼|stories?)`,
+    'i'
+  );
+  
+  // Pattern 3: "一共有三层" - special case where "有" follows "一共"
+  const pattern3 = new RegExp(
+    `一共有(${DIGIT_PATTERN})\\s*(?:层|楼)`,
+    'i'
+  );
+  
+  // Pattern 4: Number at sentence start followed by 层 (requires structural context)
+  // "三层框架", "五层楼" - but NOT "其中一层"
+  const pattern4 = new RegExp(
+    `(?:^|[，。；！？、\\s])(${DIGIT_PATTERN})\\s*(?:层|楼)(?![个处所项])`,
+    'i'
+  );
+  
+  return extractStructuredCount(message, [pattern1, pattern2, pattern3, pattern4]);
 }
 
-function extractStoryHeights(message: string): number[] | undefined {
-  return _extractNaturalArray(message, [
-    new RegExp(`(?:层高|story\\s*height)\\s*[：:]*\\s*(${DIGIT_PATTERN}(?:\\.${DIGIT_PATTERN})?)`, 'gi'),
-    // English: "4.2m each" - number and unit before "each" or "per story"
-    new RegExp(`(${DIGIT_PATTERN}(?:\\.${DIGIT_PATTERN})?)\\s*m\\s*(?:each|per\\s*story|per\\s*floor)(?=\\s|,|$)`, 'gi'),
-    // Chinese: "每层3m" or "每层 3m" - "每层" followed by optional space and number
-    new RegExp(`每层\\s*(${DIGIT_PATTERN}(?:\\.${DIGIT_PATTERN})?)\\s*m(?=\\s|,|$)`, 'gi'),
-  ]);
-}
-
-// Extract direction-specific bay count from patterns like "x方向4跨"
-function extractBayCountX(message: string): number | undefined {
-  return _extractNaturalCount(message, [
-    // x方向 followed by number and 跨
-    new RegExp(`x方向\\s*(${DIGIT_PATTERN})\\s*跨`, 'i'),
-    // 方向前有x (e.g., "向x 4跨" or "x向4跨")
-    new RegExp(`x?向\\s*${DIGIT_PATTERN}\\s*跨|${DIGIT_PATTERN}\\s*跨\\s*(?:间距|间隔)`, 'i'),
-  ]);
-}
-
-// Extract direction-specific bay count from patterns like "y方向3跨"
-function extractBayCountY(message: string): number | undefined {
-  return _extractNaturalCount(message, [
-    new RegExp(`y方向\\s*(${DIGIT_PATTERN})\\s*跨`, 'i'),
-    new RegExp(`y向\\s*(${DIGIT_PATTERN})\\s*跨`, 'i'),
-  ]);
-}
-
+/**
+ * Extract bay count (跨数) with strict structural context.
+ */
 function extractBayCount(message: string): number | undefined {
   // First check for explicit "single bay" or "one bay" patterns
   if (/\bsingle\s*bay\b/i.test(message) || /\bone\s*bay\b/i.test(message)) {
@@ -80,9 +127,67 @@ function extractBayCount(message: string): number | undefined {
   if (/\bthree\s*bays?\b/i.test(message)) {
     return 3;
   }
-  return _extractNaturalCount(message, [
-    new RegExp(`(?:跨数|bay\\s*count|span\\s*count)\\s*[：:]*\\s*(${DIGIT_PATTERN})`, 'i'),
-    new RegExp(`(?:共|有|总共|总计)\\s*(${DIGIT_PATTERN})\\s*(?:跨|bays?)`, 'i'),
+  
+  // Pattern 1: Explicit keyword followed by number
+  const pattern1 = new RegExp(
+    `(?:跨数|bay\\s*count|span\\s*count)\\s*[：:]*\\s*(${DIGIT_PATTERN})`,
+    'i'
+  );
+  
+  // Pattern 2: Structural leading context before number
+  const pattern2 = new RegExp(
+    `${STRUCTURAL_LEADING_PATTERN}(${DIGIT_PATTERN})\\s*(?:跨|bays?)`,
+    'i'
+  );
+  
+  // Pattern 3: Number followed by 跨 with structural context
+  const pattern3 = new RegExp(
+    `(?:^|[，。；！？、\\s])(${DIGIT_PATTERN})\\s*跨`,
+    'i'
+  );
+  
+  // Pattern 4: "共X跨" pattern
+  const pattern4 = new RegExp(
+    `共(${DIGIT_PATTERN})\\s*跨`,
+    'i'
+  );
+  
+  return extractStructuredCount(message, [pattern1, pattern2, pattern3, pattern4]);
+}
+
+/**
+ * Extract direction-specific bay count for X direction.
+ */
+function extractBayCountX(message: string): number | undefined {
+  // Pattern 1: "x方向4跨"
+  const pattern1 = new RegExp(`x方向\\s*(${DIGIT_PATTERN})\\s*跨`, 'i');
+  
+  // Pattern 2: "x向4跨" or "向x 4跨"
+  const pattern2 = new RegExp(`x?向\\s*${DIGIT_PATTERN}\\s*跨`, 'i');
+  
+  return extractStructuredCount(message, [pattern1, pattern2]);
+}
+
+/**
+ * Extract direction-specific bay count for Y direction.
+ */
+function extractBayCountY(message: string): number | undefined {
+  // Pattern 1: "y方向3跨"
+  const pattern1 = new RegExp(`y方向\\s*(${DIGIT_PATTERN})\\s*跨`, 'i');
+  
+  // Pattern 2: "y向3跨"
+  const pattern2 = new RegExp(`y向\\s*(${DIGIT_PATTERN})\\s*跨`, 'i');
+  
+  return extractStructuredCount(message, [pattern1, pattern2]);
+}
+
+function extractStoryHeights(message: string): number[] | undefined {
+  return _extractNaturalArray(message, [
+    new RegExp(`(?:层高|story\\s*height)\\s*[：:]*\\s*(${DIGIT_PATTERN}(?:\\.${DIGIT_PATTERN})?)`, 'gi'),
+    // English: "4.2m each" - number and unit before "each" or "per story"
+    new RegExp(`(${DIGIT_PATTERN}(?:\\.${DIGIT_PATTERN})?)\\s*m\\s*(?:each|per\\s*story|per\\s*floor)(?=\\s|,|$)`, 'gi'),
+    // Chinese: "每层3m" or "每层 3m" - "每层" followed by optional space and number
+    new RegExp(`每层\\s*(${DIGIT_PATTERN}(?:\\.${DIGIT_PATTERN})?)\\s*m(?=\\s|,|$)`, 'gi'),
   ]);
 }
 

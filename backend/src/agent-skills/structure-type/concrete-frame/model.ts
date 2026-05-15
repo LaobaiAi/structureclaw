@@ -141,46 +141,6 @@ export function getRebarDiameters(): number[] {
 }
 
 /**
- * Calculate alpha1 coefficient based on fck.
- * @param fck Characteristic compressive strength (N/mm²)
- * @returns alpha1 coefficient
- */
-export function getAlpha1(fck: number): number {
-  // For fck ≤ 50 (C50 and below), alpha1 = 1.0
-  if (fck <= 32.4) { // C50 fck = 32.4
-    return 1.0;
-  }
-  // For fck ≥ 50.2 (C80), alpha1 = 0.94
-  if (fck >= 50.2) { // C80 fck = 50.2
-    return 0.94;
-  }
-  // Linear interpolation between C50 (fck=32.4, alpha1=1.0) and C80 (fck=50.2, alpha1=0.94)
-  // TODO: Verify interpolation formula with concrete design code
-  const alpha1 = 1.0 - (fck - 32.4) * (0.06) / (50.2 - 32.4);
-  return Number.parseFloat(alpha1.toFixed(4));
-}
-
-/**
- * Calculate beta1 coefficient based on fck.
- * @param fck Characteristic compressive strength (N/mm²)
- * @returns beta1 coefficient
- */
-export function getBeta1(fck: number): number {
-  // For fck ≤ 50 (C50 and below), beta1 = 0.8
-  if (fck <= 32.4) { // C50 fck = 32.4
-    return 0.8;
-  }
-  // For fck ≥ 50.2 (C80), beta1 = 0.74
-  if (fck >= 50.2) { // C80 fck = 50.2
-    return 0.74;
-  }
-  // Linear interpolation between C50 (fck=32.4, beta1=0.8) and C80 (fck=50.2, beta1=0.74)
-  // TODO: Verify interpolation formula with concrete design code
-  const beta1 = 0.8 - (fck - 32.4) * (0.06) / (50.2 - 32.4);
-  return Number.parseFloat(beta1.toFixed(4));
-}
-
-/**
  * Normalize a concrete grade string.
  * @param raw Raw grade input (e.g., "c30", "C30")
  * @returns Normalized uppercase grade
@@ -398,13 +358,30 @@ type ConcreteFrameModel = {
 /**
  * Build a concrete frame model from draft state.
  * @param state Draft state with concrete frame parameters
- * @returns ConcreteFrameModel ready for analysis
+ * @returns ConcreteFrameModel ready for analysis, or undefined if critical geometry is missing
  */
-export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel {
-  const storyCount = state.storyCount || 1;
-  const bayCount = state.bayCount || 1;
-  const storyHeightsM = state.storyHeightsM || Array(storyCount).fill(3.0);
-  const bayWidthsM = state.bayWidthsM || Array(bayCount).fill(6.0);
+export function buildConcreteFrameModel(state: DraftState): ConcreteFrameModel | undefined {
+  // Critical geometry validation - return undefined to trigger LLM fallback if missing
+  const storyCount = state.storyCount;
+  const bayCount = state.bayCount;
+  const storyHeightsM = state.storyHeightsM;
+  const bayWidthsM = state.bayWidthsM;
+
+  if (storyCount === undefined || bayCount === undefined) {
+    return undefined;
+  }
+  if (!storyHeightsM?.length || !bayWidthsM?.length) {
+    return undefined;
+  }
+
+  // Validate length consistency between count and array (H4)
+  if (storyHeightsM.length !== storyCount) {
+    return undefined;
+  }
+  if (bayWidthsM.length !== bayCount) {
+    return undefined;
+  }
+
   const frameDimension = state.frameDimension || '2d';
   
   // Use type assertions like in frame/model.ts

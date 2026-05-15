@@ -204,6 +204,57 @@ describe('concrete-frame canonicalize core contract', () => {
     });
   });
 
+  test('returns undefined when critical geometry is missing (H2 fix)', () => {
+    // Empty state - no geometry provided
+    expect(buildConcreteFrameModel({ inferredType: 'frame', updatedAt: 0 })).toBeUndefined();
+
+    // Only storyCount, missing bayCount
+    expect(buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      storyCount: 3,
+    })).toBeUndefined();
+
+    // Only bayCount, missing storyCount
+    expect(buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      bayCount: 2,
+    })).toBeUndefined();
+
+    // storyCount/bayCount present but arrays missing
+    expect(buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      storyCount: 3,
+      bayCount: 2,
+    })).toBeUndefined();
+  });
+
+  test('returns undefined when geometry arrays have wrong length (H4 fix)', () => {
+    // storyCount=5 but storyHeightsM only has 2 elements
+    expect(buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 5,
+      bayCount: 2,
+      storyHeightsM: [3, 3],  // should be 5 elements
+      bayWidthsM: [6, 6],
+    })).toBeUndefined();
+
+    // bayCount=3 but bayWidthsM only has 2 elements
+    expect(buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 2,
+      bayCount: 3,
+      storyHeightsM: [3, 3],
+      bayWidthsM: [6, 6],  // should be 3 elements
+    })).toBeUndefined();
+  });
+
   test('derives 2d per-floor total loads from floor area intensity when single-bay geometry is explicit', () => {
     const patch = buildConcreteFrameDraftPatch(
       '2-story single-bay concrete frame, story height 3.6m, bay 6m, floor load 10kN/m2',
