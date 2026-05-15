@@ -13,7 +13,7 @@ import type {
   SkillMissingResult,
   SkillReportNarrativeInput,
 } from '../../../agent-runtime/types.js';
-import { FRAME_MATERIAL_KEYS, REQUIRED_KEYS } from './constants.js';
+import { REQUIRED_KEYS } from './constants.js';
 import { getDefaultBeamSection, getDefaultColumnSection } from './model.js';
 import { hasLateralYFloorLoad } from './extract-llm.js';
 

@@ -69,7 +69,7 @@ export function fillConcreteFrameDimensionSpecificGeometry(patch: DraftExtractio
   // Track modified fields using local variables, reconstruct at return (M5: immutable style)
   let { storyCount, storyHeightsM, bayWidthsM } = patch;
   let { bayCount, bayCountX, bayCountY, bayWidthsXM, bayWidthsYM } = patch;
-  let { frameDimension } = patch;
+  const { frameDimension } = patch;
 
   if (storyCount === undefined && storyHeightsM?.length) {
     storyCount = storyHeightsM.length;

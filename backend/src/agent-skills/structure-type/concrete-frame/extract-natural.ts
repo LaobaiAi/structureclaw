@@ -11,9 +11,6 @@ const DIGIT_PATTERN = '[零一二三四五六七八九十百千万两廿0-9]+';
 // NOTE: "一共" is kept as it's a clear structural indicator
 const STRUCTURAL_LEADING_PATTERN = '(?:^|[，。；！？、\\s]|共|包含|总计|一共|为|总)';
 
-// Chinese number-only pattern for specialized parsing
-const CHINESE_NUMBER_PATTERN = '[零一二三四五六七八九十百千万两廿]+';
-
 /**
  * Parse a localized number string (Arabic or Chinese).
  * Returns number only if the string is purely numeric.

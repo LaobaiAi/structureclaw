@@ -7,6 +7,9 @@ import {
   buildConcreteFramePatchFromLlm,
   coerceConcreteFrameDimension,
 } from '../../../../../dist/agent-skills/structure-type/concrete-frame/extract-llm.js';
+import { parseChineseNumber } from '../../../../../dist/agent-runtime/fallback.js';
+import { detectConcreteFrameStructuralType } from '../../../../../dist/agent-skills/structure-type/concrete-frame/detect.js';
+import { computeConcreteFrameMissing } from '../../../../../dist/agent-skills/structure-type/concrete-frame/interaction.js';
 
 describe('concrete-frame canonicalize core contract', () => {
   test('promotes to 3d when y-direction evidence conflicts with llm 2d output', () => {
@@ -381,5 +384,277 @@ describe('concrete-frame canonicalize core contract', () => {
     }, undefined, '两层两跨混凝土框架，每层3m');
 
     expect(patch.frameDimension).toBeUndefined();
+  });
+});
+
+// CRITICAL: parseChineseNumber unit tests (H1 fix verification)
+describe('parseChineseNumber edge cases', () => {
+  test('handles single digit characters', () => {
+    expect(parseChineseNumber('零')).toBe(0);
+    expect(parseChineseNumber('〇')).toBe(0);
+    expect(parseChineseNumber('一')).toBe(1);
+    expect(parseChineseNumber('二')).toBe(2);
+    expect(parseChineseNumber('三')).toBe(3);
+    expect(parseChineseNumber('四')).toBe(4);
+    expect(parseChineseNumber('五')).toBe(5);
+    expect(parseChineseNumber('六')).toBe(6);
+    expect(parseChineseNumber('七')).toBe(7);
+    expect(parseChineseNumber('八')).toBe(8);
+    expect(parseChineseNumber('九')).toBe(9);
+    expect(parseChineseNumber('十')).toBe(10);
+  });
+
+  test('handles compound numbers 11-99', () => {
+    expect(parseChineseNumber('十一')).toBe(11);
+    expect(parseChineseNumber('十九')).toBe(19);
+    expect(parseChineseNumber('二十')).toBe(20);
+    expect(parseChineseNumber('二十二')).toBe(22);
+    expect(parseChineseNumber('九十九')).toBe(99);
+    expect(parseChineseNumber('十')).toBe(10);
+  });
+
+  test('handles numbers with units (layer, floor)', () => {
+    expect(parseChineseNumber('三层')).toBe(3);
+    expect(parseChineseNumber('十层')).toBe(10);
+    expect(parseChineseNumber('二十二层')).toBe(22);
+  });
+
+  test('handles empty string', () => {
+    expect(parseChineseNumber('')).toBeUndefined();
+    expect(parseChineseNumber('   ')).toBeUndefined();
+  });
+
+  test('does not incorrectly parse mixed Chinese text', () => {
+    // H1 fix: "其中一层" should not return 1
+    expect(parseChineseNumber('其中一层')).toBeUndefined();
+    expect(parseChineseNumber('第一层')).toBeUndefined();
+    expect(parseChineseNumber('某一层')).toBeUndefined();
+  });
+});
+
+// CRITICAL: detect.ts all branches coverage
+describe('detectConcreteFrameStructuralType branches', () => {
+  test('detects unsupported irregular concrete frame', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: '混凝土框架不规则，有退台',
+      locale: 'zh',
+    });
+    expect(result?.supportLevel).toBe('unsupported');
+    expect(result?.key).toBe('concrete-frame');
+  });
+
+  test('detects explicit concrete frame', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: '混凝土框架',
+      locale: 'zh',
+    });
+    expect(result?.supportLevel).toBe('supported');
+    expect(result?.mappedType).toBe('frame');
+  });
+
+  test('detects concrete frame with concrete keyword', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: 'concrete frame structure',
+      locale: 'en',
+    });
+    expect(result?.supportLevel).toBe('supported');
+  });
+
+  test('detects concrete frame with rc keyword', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: 'RC框架，三层两跨',
+      locale: 'zh',
+    });
+    expect(result?.supportLevel).toBe('supported');
+  });
+
+  test('detects frame with building type context', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: '办公楼，混凝土柱网，三层',
+      locale: 'zh',
+    });
+    expect(result?.supportLevel).toBe('supported');
+  });
+
+  test('detects frame with concrete grade and context', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: 'C30混凝土框架，两层',
+      locale: 'zh',
+    });
+    expect(result?.supportLevel).toBe('supported');
+  });
+
+  test('detects from currentState when message does not match', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: '请分析这个结构',
+      locale: 'zh',
+      currentState: { structuralTypeKey: 'concrete-frame', supportLevel: 'supported' },
+    });
+    expect(result?.supportLevel).toBe('supported');
+  });
+
+  test('returns null when no concrete frame evidence', () => {
+    const result = detectConcreteFrameStructuralType({
+      message: '这是一个普通文本',
+      locale: 'zh',
+    });
+    expect(result).toBeNull();
+  });
+});
+
+// CRITICAL: model.ts error paths and fallback behavior (H2/H3/H4 fix verification)
+describe('buildConcreteFrameModel error paths', () => {
+  test('falls back to C30 for invalid concrete grade', () => {
+    const model = buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 2,
+      bayCount: 1,
+      storyHeightsM: [3, 3],
+      bayWidthsM: [6],
+      frameConcreteGrade: 'INVALID_GRADE',
+      frameRebarGrade: 'HRB400',
+      frameColumnSection: '400X400',
+      frameBeamSection: '250X600',
+    });
+    expect(model?.frameConcreteGrade).toBe('C30');
+    expect(model?.concreteProps.grade).toBe('C30');
+  });
+
+  test('falls back to HRB400 for invalid rebar grade', () => {
+    const model = buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 2,
+      bayCount: 1,
+      storyHeightsM: [3, 3],
+      bayWidthsM: [6],
+      frameConcreteGrade: 'C30',
+      frameRebarGrade: 'INVALID_GRADE',
+      frameColumnSection: '400X400',
+      frameBeamSection: '250X600',
+    });
+    expect(model?.frameRebarGrade).toBe('HRB400');
+    expect(model?.rebarProps.grade).toBe('HRB400');
+  });
+
+  test('uses default column section when not provided', () => {
+    const model = buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 2,
+      bayCount: 1,
+      storyHeightsM: [3, 3],
+      bayWidthsM: [6],
+      frameConcreteGrade: 'C30',
+      frameRebarGrade: 'HRB400',
+      frameColumnSection: undefined,
+      frameBeamSection: '250X600',
+    });
+    expect(model?.frameColumnSection).toBe('500X500');
+  });
+
+  test('uses default beam section when not provided', () => {
+    const model = buildConcreteFrameModel({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 2,
+      bayCount: 1,
+      storyHeightsM: [3, 3],
+      bayWidthsM: [6],
+      frameConcreteGrade: 'C30',
+      frameRebarGrade: 'HRB400',
+      frameColumnSection: '400X400',
+      frameBeamSection: undefined,
+    });
+    expect(model?.frameBeamSection).toBe('300X600');
+  });
+});
+
+// IMPORTANT: extract-natural.ts adversarial input handling
+describe('normalizeConcreteFrameNaturalPatch adversarial inputs', () => {
+  test('handles empty message gracefully', () => {
+    const patch = normalizeConcreteFrameNaturalPatch('', undefined);
+    expect(patch.storyCount).toBeUndefined();
+    expect(patch.frameConcreteGrade).toBeUndefined();
+  });
+
+  test('handles gibberish input gracefully', () => {
+    const patch = normalizeConcreteFrameNaturalPatch('asdfghjkl qwerty', undefined);
+    expect(patch.storyCount).toBeUndefined();
+    expect(patch.frameDimension).toBeUndefined();
+  });
+
+  test('handles mixed Chinese/English with numbers', () => {
+    const patch = normalizeConcreteFrameNaturalPatch(
+      '3层混凝土框架，每层3m，concrete grade C30',
+      undefined,
+    );
+    expect(patch.storyCount).toBe(3);
+    expect(patch.frameConcreteGrade).toBe('C30');
+  });
+
+  test('extracts concrete grade when mixed with rebar grade', () => {
+    const patch = normalizeConcreteFrameNaturalPatch(
+      '混凝土框架，C30混凝土，HRB400钢筋',
+      undefined,
+    );
+    expect(patch.frameConcreteGrade).toBe('C30');
+    expect(patch.frameRebarGrade).toBe('HRB400');
+  });
+});
+
+// IMPORTANT: computeMissing boundary cases
+describe('computeConcreteFrameMissing boundary cases', () => {
+  test('returns all keys missing for empty state', () => {
+    const result = computeConcreteFrameMissing({
+      inferredType: 'frame',
+      updatedAt: 0,
+    }, 'interactive');
+    expect(result.critical.length).toBeGreaterThan(0);
+    expect(result.optional.length).toBeGreaterThanOrEqual(0);
+  });
+
+  test('returns empty missing for complete state', () => {
+    const result = computeConcreteFrameMissing({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 3,
+      bayCount: 2,
+      storyHeightsM: [3, 3, 3],
+      bayWidthsM: [6, 6],
+      floorLoads: [
+        { story: 1, verticalKN: 100 },
+        { story: 2, verticalKN: 100 },
+        { story: 3, verticalKN: 100 },
+      ],
+      frameBaseSupportType: 'fixed',
+      frameConcreteGrade: 'C30',
+      frameRebarGrade: 'HRB400',
+      frameColumnSection: '500X500',
+      frameBeamSection: '300X600',
+    }, 'interactive');
+    expect(result.critical.length).toBe(0);
+    expect(result.optional.length).toBe(0);
+  });
+
+  test('returns partial missing for partially complete state', () => {
+    const result = computeConcreteFrameMissing({
+      inferredType: 'frame',
+      updatedAt: 0,
+      frameDimension: '2d',
+      storyCount: 3,
+      bayCount: 2,
+      storyHeightsM: [3, 3, 3],
+      bayWidthsM: [6, 6],
+    }, 'interactive');
+    expect(result.critical.length).toBeGreaterThan(0);
+    expect(result.critical).toContain('floorLoads');
+    expect(result.critical).toContain('frameConcreteGrade');
   });
 });
