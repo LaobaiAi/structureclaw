@@ -1,13 +1,12 @@
 import { describe, expect, test } from '@jest/globals';
 import { canonicalizeConcreteFramePatch } from '../../../../../dist/agent-skills/structure-type/concrete-frame/canonicalize.js';
-import { normalizeConcreteFrameNaturalPatch } from '../../../../../dist/agent-skills/structure-type/concrete-frame/extract-natural.js';
+import { normalizeConcreteFrameNaturalPatch, parseChineseNumber } from '../../../../../dist/agent-skills/structure-type/concrete-frame/extract-natural.js';
 import { buildConcreteFrameModel } from '../../../../../dist/agent-skills/structure-type/concrete-frame/model.js';
 import {
   buildConcreteFrameDraftPatch,
   buildConcreteFramePatchFromLlm,
   coerceConcreteFrameDimension,
 } from '../../../../../dist/agent-skills/structure-type/concrete-frame/extract-llm.js';
-import { parseChineseNumber } from '../../../../../dist/agent-runtime/fallback.js';
 import { detectConcreteFrameStructuralType } from '../../../../../dist/agent-skills/structure-type/concrete-frame/detect.js';
 import { computeConcreteFrameMissing } from '../../../../../dist/agent-skills/structure-type/concrete-frame/interaction.js';
 

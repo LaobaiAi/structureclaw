@@ -67,11 +67,35 @@ function buildConcreteFrameDefaultReason(paramKey: string, locale: AppLocale, st
 }
 
 export function computeConcreteFrameMissing(state: DraftState, phase: 'interactive' | 'execution'): SkillMissingResult {
-  return computeLegacyMissing(
+  // Get base critical keys from legacy computation
+  const baseMissing = computeLegacyMissing(
     { ...state, inferredType: 'frame' },
     phase,
     [...REQUIRED_KEYS],
   );
+
+  // Add material keys as critical for concrete frames in interactive phase
+  if (phase === 'interactive') {
+    const missingConcreteGrade = state.frameConcreteGrade === undefined;
+    const missingRebarGrade = state.frameRebarGrade === undefined;
+    const missingColumnSection = state.frameColumnSection === undefined;
+    const missingBeamSection = state.frameBeamSection === undefined;
+
+    if (missingConcreteGrade && !baseMissing.critical.includes('frameConcreteGrade')) {
+      baseMissing.critical.push('frameConcreteGrade');
+    }
+    if (missingRebarGrade && !baseMissing.critical.includes('frameRebarGrade')) {
+      baseMissing.critical.push('frameRebarGrade');
+    }
+    if (missingColumnSection && !baseMissing.critical.includes('frameColumnSection')) {
+      baseMissing.critical.push('frameColumnSection');
+    }
+    if (missingBeamSection && !baseMissing.critical.includes('frameBeamSection')) {
+      baseMissing.critical.push('frameBeamSection');
+    }
+  }
+
+  return baseMissing;
 }
 
 export function mapConcreteFrameLabels(keys: string[], locale: AppLocale): string[] {

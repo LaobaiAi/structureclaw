@@ -1,4 +1,4 @@
-import { normalizeNumber, parseChineseNumber } from '../../../agent-runtime/fallback.js';
+import { normalizeNumber } from '../../../agent-runtime/fallback.js';
 import type { DraftExtraction, DraftState } from '../../../agent-runtime/types.js';
 
 // Enhanced digit pattern for explicit structural context
@@ -12,6 +12,84 @@ const DIGIT_PATTERN = '[零一二三四五六七八九十百千万两廿0-9]+';
 const STRUCTURAL_LEADING_PATTERN = '(?:^|[，。；！？、\\s]|共|包含|总计|一共|为|总)';
 
 /**
+ * Local version of parseChineseNumber with H1 fix:
+ * Returns undefined for ambiguous mixed Chinese text like "其中一层", "第一层", "某一层"
+ * These are ordinal references, not counts. Only parses if the string starts with a digit.
+ */
+function parseChineseNumber(text: string): number | undefined {
+  const chineseDigits: Record<string, number> = {
+    '零': 0, '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+    '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+  };
+
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+
+  // H1 fix: Return undefined for ambiguous mixed Chinese text like "其中一层", "第一层", "某一层"
+  // These are ordinal references, not counts. Only parse if the string starts with a digit.
+  if (trimmed.length > 1) {
+    const firstChar = trimmed[0];
+    // Check if first character is a Chinese digit
+    if (chineseDigits[firstChar] !== undefined) {
+      // It's a standalone digit at the start, OK to parse
+    } else {
+      // First char is not a digit - this is likely ordinal like "其中一层" or "第一层"
+      // Return undefined to avoid false positives
+      return undefined;
+    }
+  }
+
+  // Handle single character digits (零, 一, 二, 三, etc.)
+  if (trimmed.length === 1) {
+    const value = chineseDigits[trimmed];
+    return value !== undefined ? value : undefined;
+  }
+
+  // Handle compound numbers like 二十二, 三层, 十五
+  let result = 0;
+  let temp = 0;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i];
+    const value = chineseDigits[char];
+
+    if (value === undefined) {
+      // Skip non-Chinese-numeral characters (like "层", "楼", etc.)
+      continue;
+    }
+
+    if (value === 10) {
+      // "十" acts as a multiplier for tens place
+      if (temp === 0) {
+        temp = 10;
+      } else {
+        result += temp * 10;
+        temp = 0;
+      }
+    } else if (value < 10) {
+      // Regular digit
+      if (temp >= 10) {
+        // Previous was a tens multiplier
+        temp = temp + value;
+      } else if (temp > 0) {
+        // Previous digit exists, multiply and add
+        result += temp;
+        temp = value;
+      } else {
+        temp = value;
+      }
+    }
+  }
+
+  result += temp;
+
+  // Handle cases like "十" (10) alone or at the end
+  if (trimmed === '十') return 10;
+
+  return result > 0 ? result : undefined;
+}
+
+/**
  * Parse a localized number string (Arabic or Chinese).
  * Returns number only if the string is purely numeric.
  */
@@ -23,7 +101,7 @@ function parseLocalizedNumber(raw: string | undefined): number | undefined {
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
   }
-  // Try Chinese numeral
+  // Try Chinese numeral (local version with H1 fix)
   const chinese = parseChineseNumber(trimmed);
   if (chinese !== undefined && chinese > 0) {
     return chinese;
@@ -100,14 +178,21 @@ function extractStoryCount(message: string): number | undefined {
     'i'
   );
   
-  // Pattern 4: Number at sentence start followed by 层 (requires structural context)
-  // "三层框架", "五层楼" - but NOT "其中一层"
+  // Pattern 4: Number followed by 层 (requires structural context, not ordinal like "第一层")
+  // "三层框架", "五层楼" - but NOT "其中一层" or "第一层"
   const pattern4 = new RegExp(
     `(?:^|[，。；！？、\\s])(${DIGIT_PATTERN})\\s*(?:层|楼)(?![个处所项])`,
     'i'
   );
-  
-  return extractStructuredCount(message, [pattern1, pattern2, pattern3, pattern4]);
+
+  // Pattern 5: Handle "一个三层", "设计一个三层" patterns
+  // This captures "X层" after phrases like "一个", "共", "共计", etc. (not ordinal)
+  const pattern5 = new RegExp(
+    `(?:一个|共|共计)(${DIGIT_PATTERN})\\s*层(?!\\s*的)`,
+    'i'
+  );
+
+  return extractStructuredCount(message, [pattern1, pattern2, pattern3, pattern4, pattern5]);
 }
 
 /**
@@ -342,3 +427,6 @@ export function normalizeConcreteFrameNaturalPatch(
     ...(frameBeamSection !== undefined && { frameBeamSection }),
   };
 }
+
+// Re-export parseChineseNumber with H1 fix for use in tests
+export { parseChineseNumber };
