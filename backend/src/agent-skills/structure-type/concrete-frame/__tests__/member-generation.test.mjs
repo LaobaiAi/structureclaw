@@ -156,8 +156,8 @@ describe('PR2: concrete-frame member generation', () => {
     test('scales column size with story count', () => {
       const inputs = [
         { storyCount: 1, concreteGrade: 'C30', expectedSize: 500 },
-        { storyCount: 6, concreteGrade: 'C30', expectedSize: 600 },
-        { storyCount: 12, concreteGrade: 'C30', expectedSize: 850 },
+        { storyCount: 6, concreteGrade: 'C30', expectedSize: 550 },
+        { storyCount: 12, concreteGrade: 'C30', expectedSize: 750 },
       ];
 
       inputs.forEach(({ storyCount, concreteGrade, expectedSize }) => {

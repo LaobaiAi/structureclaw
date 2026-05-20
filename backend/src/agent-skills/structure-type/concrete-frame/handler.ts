@@ -12,6 +12,7 @@ import {
 } from './interaction.js';
 import { mergeConcreteFrameState } from './merge.js';
 import { buildConcreteFrameModel, getConcreteMaterial, normalizeConcreteGrade, normalizeSectionName } from './model.js';
+import { DEFAULT_FLOOR_LOAD_KN_PER_M2 } from './constants.js';
 import type {
   ConcreteBeam,
   ConcreteColumn,
@@ -23,6 +24,34 @@ import type {
 // ============================================================================
 // PR2: 构件生成器
 // ============================================================================
+
+/** Span-thickness ratio limits per slab type (GB/T 50010-2010 §9.1.2) */
+const SPAN_DEPTH_RATIO_LIMITS: Record<string, number> = {
+  'one-way': 30,
+  'two-way': 40,
+  'flat-slab': 30,
+  'waffle': 35,
+};
+
+/** Minimum slab thickness by slabType × slabUsage (mm) — GB/T 50010-2010 §9.1.2 */
+const MIN_THICKNESS_MAP: Record<string, number> = {
+  'one-way_roof': 60,
+  'one-way_residential': 60,
+  'one-way_commercial': 70,
+  'one-way_vehicle': 80,
+  'two-way_roof': 100,
+  'two-way_residential': 80,
+  'two-way_commercial': 80,
+  'two-way_vehicle': 80,
+  'flat-slab_roof': 150,
+  'flat-slab_residential': 150,
+  'flat-slab_commercial': 150,
+  'flat-slab_vehicle': 150,
+  'waffle_roof': 200,
+  'waffle_residential': 200,
+  'waffle_commercial': 200,
+  'waffle_vehicle': 200,
+};
 
 /**
  * 生成所有混凝土构件
@@ -143,9 +172,9 @@ export function generateColumns(input: ConcreteFrameInput): ConcreteColumn[] {
   // 轴压比限值 (四级抗震)
   const axialLoadRatioLimit = 0.9;
 
-  // 每层每柱默认轴力(kN)估算：层面积 × 单位荷载 12kN/m²
+  // 每层每柱默认轴力(kN)估算：从属面积 × 15 kN/m²
   const avgSpanM = bayWidthsM.reduce((a, b) => a + b, 0) / bayWidthsM.length;
-  const baseLoadKN = axialLoadKN ?? (avgSpanM * storyCount * 120);
+  const baseLoadKN = axialLoadKN ?? (avgSpanM * avgSpanM * storyCount * DEFAULT_FLOOR_LOAD_KN_PER_M2);
 
   for (let story = 0; story < storyCount; story++) {
     const heightM = storyHeightsM[story] ?? 3.6;
@@ -223,38 +252,9 @@ export function generateSlabs(input: ConcreteFrameInput): ConcreteSlab[] {
     slabUsage = 'residential',
   } = input;
 
-  // 跨厚比限值配置
-  const spanDepthRatioLimits: Record<string, number> = {
-    'one-way': 30,
-    'two-way': 40,
-    'flat-slab': 30,
-    'waffle': 35,
-  };
-
-  // 最小厚度配置 (mm) — GB/T 50010-2010 第 9.1.2 条
-  // 键: slabType_slabUsage
-  const minThicknessMap: Record<string, number> = {
-    'one-way_roof': 60,
-    'one-way_residential': 60,
-    'one-way_commercial': 70,
-    'one-way_vehicle': 80,
-    'two-way_roof': 100,
-    'two-way_residential': 80,
-    'two-way_commercial': 80,
-    'two-way_vehicle': 80,
-    'flat-slab_roof': 150,
-    'flat-slab_residential': 150,
-    'flat-slab_commercial': 150,
-    'flat-slab_vehicle': 150,
-    'waffle_roof': 200,
-    'waffle_residential': 200,
-    'waffle_commercial': 200,
-    'waffle_vehicle': 200,
-  };
-
-  const spanDepthRatioLimit = spanDepthRatioLimits[slabType] ?? 30;
+  const spanDepthRatioLimit = SPAN_DEPTH_RATIO_LIMITS[slabType] ?? 30;
   const minThicknessKey = `${slabType}_${slabUsage}`;
-  const minThickness = minThicknessMap[minThicknessKey] ?? 60;
+  const minThickness = MIN_THICKNESS_MAP[minThicknessKey] ?? 60;
 
   for (let i = 0; i < bayWidthsM.length; i++) {
     const spanM = bayWidthsM[i]!;
