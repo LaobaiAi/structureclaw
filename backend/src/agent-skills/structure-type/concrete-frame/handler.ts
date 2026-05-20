@@ -129,7 +129,6 @@ export function generateColumns(input: ConcreteFrameInput): ConcreteColumn[] {
   const columns: ConcreteColumn[] = [];
   const {
     storyCount,
-    bayCount,
     storyHeightsM,
     bayWidthsM,
     concreteGrade,
