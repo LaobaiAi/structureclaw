@@ -11,7 +11,7 @@ import {
   resolveConcreteFrameStage,
 } from './interaction.js';
 import { mergeConcreteFrameState } from './merge.js';
-import { buildConcreteFrameModel, getConcreteMaterial, normalizeConcreteGrade, normalizeSectionName } from './model.js';
+import { buildConcreteFrameModel, getConcreteMaterial, isValidConcreteGrade, normalizeConcreteGrade, normalizeSectionName } from './model.js';
 import { DEFAULT_FLOOR_LOAD_KN_PER_M2 } from './constants.js';
 import type {
   ConcreteBeam,
@@ -54,53 +54,88 @@ const MIN_THICKNESS_MAP: Record<string, number> = {
 };
 
 /**
+ * 验证混凝土框架输入参数
+ * @throws Error 如果输入参数无效
+ */
+function validateConcreteFrameInput(input: ConcreteFrameInput): void {
+  if (!input.bayWidthsM?.length) {
+    throw new Error('bayWidthsM must be a non-empty array');
+  }
+  if (input.bayWidthsM.some(w => w <= 0)) {
+    throw new Error('bayWidthsM must contain positive values');
+  }
+  if (input.storyHeightsM?.length !== input.storyCount) {
+    throw new Error(
+      `storyHeightsM length (${input.storyHeightsM?.length ?? 'undefined'}) must match storyCount (${input.storyCount})`,
+    );
+  }
+  if (!isValidConcreteGrade(input.concreteGrade)) {
+    throw new Error(`Invalid concrete grade: ${input.concreteGrade}`);
+  }
+}
+
+/**
  * 生成所有混凝土构件
  * @param input 混凝土框架输入参数
  * @returns 包含梁、柱、板的输出对象
  */
 export function generateMembers(input: ConcreteFrameInput): ConcreteFrameOutput {
-  const warnings: Array<{ code: string; message: string }> = [];
   const errors: Array<{ code: string; message: string }> = [];
+  const warnings: Array<{ code: string; message: string }> = [];
 
   try {
-    const beams = generateBeams(input);
-    const columns = generateColumns(input);
-    const slabs = generateSlabs(input);
-
-    return { concreteBeams: beams, concreteColumns: columns, concreteSlabs: slabs, warnings, errors };
+    validateConcreteFrameInput(input);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    errors.push({ code: 'GENERATION_ERROR', message });
-    return {
-      concreteBeams: [],
-      concreteColumns: [],
-      concreteSlabs: [],
-      warnings,
-      errors,
-    };
+    errors.push({ code: 'INPUT_VALIDATION_ERROR', message });
+    return { concreteBeams: [], concreteColumns: [], concreteSlabs: [], warnings, errors };
   }
+
+  let beams: ConcreteBeam[] = [];
+  let columns: ConcreteColumn[] = [];
+  let slabs: ConcreteSlab[] = [];
+
+  try {
+    beams = generateBeams(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    errors.push({ code: 'BEAM_GENERATION_ERROR', message });
+  }
+
+  try {
+    columns = generateColumns(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    errors.push({ code: 'COLUMN_GENERATION_ERROR', message });
+  }
+
+  try {
+    slabs = generateSlabs(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    errors.push({ code: 'SLAB_GENERATION_ERROR', message });
+  }
+
+  return { concreteBeams: beams, concreteColumns: columns, concreteSlabs: slabs, warnings, errors };
 }
 
 /**
  * 生成梁构件
- * 矩形梁: h = span / 10 (主梁) 或 h = span / 14 (次梁)
+ * 矩形梁: h = span / 10
  * 梁宽 b = h / 2
  * T形梁: 根据 GB/T 50010-2010 表 5.2.4 计算翼缘宽度
  */
 export function generateBeams(input: ConcreteFrameInput): ConcreteBeam[] {
   const beams: ConcreteBeam[] = [];
-  const { bayWidthsM, beamType = 'rectangular', storyCount } = input;
+  const { bayWidthsM, beamType = 'rectangular' } = input;
 
-  // 判断是否为主梁（第一层或截面尺寸较大的为默认主梁）
-  const isMainBeam = (index: number) => index === 0 || storyCount <= 3;
+  // 混凝土框架中所有梁均为框架主梁，统一采用 l/10 跨高比
+  const spanDepthRatioTarget = 10;
 
   for (let i = 0; i < bayWidthsM.length; i++) {
     const spanM = bayWidthsM[i]!;
     const spanMM = spanM * 1000;
-    const isMain = isMainBeam(i);
 
-    // 跨高比：主梁 l/10 ~ l/8，次梁 l/15 ~ l/12
-    const spanDepthRatioTarget = isMain ? 10 : 14;
     let heightMM = Math.round((spanMM / spanDepthRatioTarget) / 50) * 50; // 取整到50mm
     heightMM = Math.max(heightMM, 250); // 最小梁高250mm
 
@@ -110,23 +145,27 @@ export function generateBeams(input: ConcreteFrameInput): ConcreteBeam[] {
 
     if (beamType === 't-shaped') {
       // T形梁计算 (GB/T 50010-2010 表 5.2.4)
-      const hf = Math.round(heightMM / 6); // 翼缘厚度取梁高的1/6
-      const bw = widthMM; // 腹板宽度等于梁宽
-      // 边梁 (首跨或末跨): bf = bw + l0/6; 中梁: bf = bw + l0/3
-      // 且 bf ≤ bw + 12*hf
+      // hf' — 受压区翼缘厚度 (带撇)，取板厚；当前用 h/6 近似 (PR3 修正)
+      const flangeThicknessMM_compression = Math.round(heightMM / 6);
+      // b — 腹板宽度
+      const bw = widthMM;
+      // bf' — 受压区翼缘有效宽度 (带撇) = min(l₀/k, b + n·hf')
+      // 边梁: l₀/6,  b + 5hf'
+      // 中梁: l₀/3,  b + 12hf'
       const isEdge = i === 0 || i === bayWidthsM.length - 1;
-      const bfAddend = isEdge ? Math.round(spanMM / 6) : Math.round(spanMM / 3);
-      let bf = bw + bfAddend;
-      const bfMax = bw + 12 * hf;
-      bf = Math.min(bf, bfMax);
+      const candidateL0 = Math.round(spanMM / (isEdge ? 6 : 3));       // ① l₀/k
+      const candidateHf = bw + (isEdge ? 5 : 12) * flangeThicknessMM_compression; // ③ b + n·hf'
+      const flangeWidthMM_compression = Math.min(candidateL0, candidateHf);
+      // TODO(PR4): 补充净距约束 ② b + sₙ
 
       beams.push({
         id: `B-${i + 1}`,
         type: 't-shaped',
         spanM: spanM,
         webWidthMM: bw,
-        flangeWidthMM: bf,
-        flangeThicknessMM: hf,
+        flangeWidthMM_compression,
+        flangeThicknessMM_compression,
+        supportEffectiveWidthMM: bw, // 支座区 bf' = b (翼缘受拉开裂不计)
         totalHeightMM: heightMM,
         spanDepthRatio: spanMM / heightMM,
         meetsRequirement: (spanMM / heightMM) >= 8 && (spanMM / heightMM) <= 16,

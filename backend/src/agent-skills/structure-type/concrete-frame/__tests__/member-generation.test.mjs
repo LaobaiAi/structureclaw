@@ -51,14 +51,16 @@ describe('PR2: concrete-frame member generation', () => {
       expect(edgeBeam.type).toBe('t-shaped');
       expect(midBeam.type).toBe('t-shaped');
       // 中梁翼缘更宽 (l0/3 vs l0/6)
-      expect(midBeam.flangeWidthMM).toBeGreaterThan(edgeBeam.flangeWidthMM);
-      // 所有梁满足 bf ≤ bw + 12*hf
-      beams.forEach(beam => {
-        expect(beam.flangeWidthMM).toBeLessThanOrEqual(
-          beam.webWidthMM + 12 * beam.flangeThicknessMM,
-        );
+      expect(midBeam.flangeWidthMM_compression).toBeGreaterThan(edgeBeam.flangeWidthMM_compression);
+      // bf' = min(l₀/k, b + n·hf') — 边梁 b + 5hf'，中梁 b + 12hf'
+      beams.forEach((beam, i) => {
+        const isEdge = i === 0 || i === beams.length - 1;
+        const candidateL0 = Math.round(beam.spanM * 1000 / (isEdge ? 6 : 3));
+        const candidateHf = beam.webWidthMM + (isEdge ? 5 : 12) * beam.flangeThicknessMM_compression;
+        const expectedBfMax = Math.min(candidateL0, candidateHf);
+        expect(beam.flangeWidthMM_compression).toBe(expectedBfMax);
         expect(beam.webWidthMM).toBeGreaterThanOrEqual(200);
-        expect(beam.flangeThicknessMM).toBeGreaterThan(0);
+        expect(beam.flangeThicknessMM_compression).toBeGreaterThan(0);
         expect(beam.totalHeightMM).toBeGreaterThanOrEqual(250);
       });
     });

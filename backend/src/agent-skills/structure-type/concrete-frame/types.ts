@@ -48,17 +48,26 @@ export interface ConcreteFrameInput {
 
 /**
  * 混凝土梁构件
+ *
+ * T形截面符号 (GB/T 50010-2010):
+ *   bf' / hf' — 受压区翼缘宽度/厚度（带撇，跨中正弯矩区有效）
+ *   bf       — 受拉区翼缘宽度（不带撇，正T底面无翼缘 → bf = b）
+ *   b        — 腹板宽度
+ *   h        — 截面总高
+ *
+ * 命名约定: 与 model.ts 一致，用 _compression / _tension 后缀代替规范中的撇号。
  */
 export interface ConcreteBeam {
   id: string;
   type: 'rectangular' | 't-shaped';
   spanM: number;
-  widthMM?: number; // 矩形梁宽度
-  heightMM?: number; // 矩形梁高度
-  webWidthMM?: number; // T形梁腹板宽度
-  flangeWidthMM?: number; // T形梁翼缘宽度
-  flangeThicknessMM?: number; // T形梁翼缘厚度
-  totalHeightMM?: number; // T形梁总高度
+  widthMM?: number; // 矩形梁宽度 (b)
+  heightMM?: number; // 矩形梁高度 (h)
+  webWidthMM?: number; // 腹板宽度 (b)
+  flangeWidthMM_compression?: number; // 受压区翼缘有效宽度 (bf')，仅跨中正弯矩区有效
+  flangeThicknessMM_compression?: number; // 受压区翼缘厚度 (hf')
+  supportEffectiveWidthMM?: number; // 支座有效宽度 (负弯矩区 bf' = b)，等于 webWidthMM
+  totalHeightMM?: number; // 截面总高度 (h)
   spanDepthRatio?: number;
   meetsRequirement?: boolean;
 }
