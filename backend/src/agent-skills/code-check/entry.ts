@@ -155,23 +155,23 @@ function extractElementDataForCodeCheck(
     }
   }
 
-  // lookup tables: section/material/node by id
+  // lookup tables: section/material/node by id (supports both string and number IDs)
   const sectionById: Record<string, Record<string, unknown>> = {};
   for (const s of sections) {
-    if (s && typeof s === 'object' && typeof s['id'] === 'string') {
-      sectionById[s['id']] = s;
+    if (s && typeof s === 'object' && (typeof s['id'] === 'string' || typeof s['id'] === 'number')) {
+      sectionById[String(s['id'])] = s;
     }
   }
   const materialById: Record<string, Record<string, unknown>> = {};
   for (const m of materials) {
-    if (m && typeof m === 'object' && typeof m['id'] === 'string') {
-      materialById[m['id']] = m;
+    if (m && typeof m === 'object' && (typeof m['id'] === 'string' || typeof m['id'] === 'number')) {
+      materialById[String(m['id'])] = m;
     }
   }
   const nodeById: Record<string, Record<string, unknown>> = {};
   for (const n of nodes) {
-    if (n && typeof n === 'object' && typeof n['id'] === 'string') {
-      nodeById[n['id']] = n;
+    if (n && typeof n === 'object' && (typeof n['id'] === 'string' || typeof n['id'] === 'number')) {
+      nodeById[String(n['id'])] = n;
     }
   }
 
@@ -213,13 +213,26 @@ function extractElementDataForCodeCheck(
     const Iy_m4 = Number(sectionProps['Iy'] ?? 0);
     const Iz_m4 = Number(sectionProps['Iz'] ?? 0);
     const J_m4 = Number(sectionProps['J'] ?? 0);
+    const Wx_m3 = Number(sectionProps['Wx'] ?? sectionProps['Wnx'] ?? 0);
+    const S_m3 = Number(sectionProps['S'] ?? 0);
+    const tw_m = Number(sectionProps['tw'] ?? 0);
+    const As_m2 = Number(sectionProps['As'] ?? 0);
+
     const A_mm2 = A_m2 * 1e6;
     const Iy_mm4 = Iy_m4 * 1e12;
     const Iz_mm4 = Iz_m4 * 1e12;
     const J_mm4 = J_m4 * 1e12;
+    const Wx_mm3 = Wx_m3 * 1e9;
+    const S_mm3 = S_m3 * 1e9;
+    const tw_mm = tw_m * 1e3;
+    const As_mm2 = As_m2 * 1e6;
 
     // rotation radius i = sqrt(I / A) in mm
     const i_min = A_mm2 > 0 ? Math.sqrt(Math.min(Iy_mm4, Iz_mm4) / A_mm2) : undefined;
+
+    // design parameters from element metadata (phi, lambda limits, etc.)
+    const elemMetadata = (typeof elem['metadata'] === 'object' && elem['metadata'] !== null
+      ? elem['metadata'] as Record<string, unknown> : {}) as Record<string, unknown>;
 
     elementData[elemId] = {
       type: elem['type'],
@@ -229,6 +242,10 @@ function extractElementDataForCodeCheck(
         ...(Iz_mm4 > 0 ? { Iz: Iz_mm4 } : {}),
         ...(J_mm4 > 0 ? { J: J_mm4 } : {}),
         ...(i_min !== undefined ? { i: i_min } : {}),
+        ...(Wx_mm3 > 0 ? { Wx: Wx_mm3, Wnx: Wx_mm3 } : {}),
+        ...(S_mm3 > 0 ? { S: S_mm3 } : {}),
+        ...(tw_mm > 0 ? { tw: tw_mm } : {}),
+        ...(As_mm2 > 0 ? { As: As_mm2 } : {}),
         ...(sectionObj?.['width'] !== undefined ? { width: sectionObj?.['width'] } : {}),
         ...(sectionObj?.['height'] !== undefined ? { height: sectionObj?.['height'] } : {}),
         // preserve G from properties for shear stiffness
@@ -240,10 +257,22 @@ function extractElementDataForCodeCheck(
       forces: {
         N: n1Forces['N'],
         V: n1Forces['V'],
-        Mx: n1Forces['M'] ?? n1Forces['Mx'],
-        ...(n1Forces['Mx'] !== undefined ? { Mx: n1Forces['Mx'] } : {}),
+        Mx: n1Forces['Mx'] !== undefined ? n1Forces['Mx'] : n1Forces['M'],
       },
       ...(lengthMm !== undefined ? { length: lengthMm } : {}),
+      // design parameters (optionally passed via element metadata or element itself)
+      ...(typeof elem['phi'] === 'number' ? { phi: elem['phi'] } : {}),
+      ...(typeof elem['phi_b'] === 'number' ? { phi_b: elem['phi_b'] } : {}),
+      ...(typeof elem['phi_axial'] === 'number' ? { phi_axial: elem['phi_axial'] } : {}),
+      ...(typeof elem['beta1'] === 'number' ? { beta1: elem['beta1'] } : {}),
+      ...(typeof elem['btLimit'] === 'number' ? { btLimit: elem['btLimit'] } : {}),
+      ...(typeof elem['lambdaLimit'] === 'number' ? { lambdaLimit: elem['lambdaLimit'] } : {}),
+      ...(typeof elem['deflectionLimitN'] === 'number' ? { deflectionLimitN: elem['deflectionLimitN'] } : {}),
+      ...(typeof elem['deflection'] === 'number' ? { deflection: elem['deflection'] } : {}),
+      // from metadata
+      ...(typeof elemMetadata['phi'] === 'number' ? { phi: elemMetadata['phi'] } : {}),
+      ...(typeof elemMetadata['phi_b'] === 'number' ? { phi_b: elemMetadata['phi_b'] } : {}),
+      ...(typeof elemMetadata['phi_axial'] === 'number' ? { phi_axial: elemMetadata['phi_axial'] } : {}),
     };
   }
 

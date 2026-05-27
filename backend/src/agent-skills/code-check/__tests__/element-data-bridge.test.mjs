@@ -200,6 +200,65 @@ describe('elementData bridge', () => {
     expect(ed['C1']['forces']).toBeDefined();
   });
 
+  test('supports numeric section/material/node IDs', () => {
+    const model = {
+      elements: [
+        { id: 'E1', type: 'beam', nodes: ['N1', 'N2'], material: 1, section: 1 },
+      ],
+      sections: [
+        { id: 1, name: 'H300X200', purpose: 'beam', properties: { A: 0.006, Iy: 0.0001, Wx: 0.0005, S: 0.0003, tw: 0.006, As: 0.002, G: 79000 } },
+      ],
+      materials: [
+        { id: 1, name: 'Q355', category: 'steel', E: 206000, fy: 355 },
+      ],
+      nodes: [
+        { id: 'N1', x: 0, y: 0, z: 0 },
+        { id: 'N2', x: 0, y: 0, z: 3 },
+      ],
+    };
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model,
+      analysis: { data: { forces: { 'E1': { n1: { N: 10000, V: 5000, M: 2000000 } } } } },
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    const section = ed['E1']['section'];
+    expect(section['A']).toBeCloseTo(6000, -1);    // 0.006 * 1e6
+    expect(section['Wx']).toBeCloseTo(500000, -2); // 0.0005 * 1e9
+    expect(section['S']).toBeCloseTo(300000, -2);  // 0.0003 * 1e9
+    expect(section['tw']).toBeCloseTo(6, -1);      // 0.006 * 1e3
+    expect(section['As']).toBeCloseTo(2000, -1);   // 0.002 * 1e6
+    expect(ed['E1']['material']['fy']).toBe(355);
+    expect(ed['E1']['length']).toBeCloseTo(3000, -2);
+  });
+
+  test('passes through element design parameters when present', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: {
+        elements: [
+          { id: 'E1', type: 'beam', nodes: ['N1', 'N2'], material: '1', section: '1',
+            phi: 0.85, phi_b: 0.9, btLimit: 15, lambdaLimit: 200 },
+        ],
+        sections: [{ id: '1', properties: { A: 0.005 } }],
+        materials: [{ id: '1', E: 206000, fy: 355 }],
+        nodes: [{ id: 'N1', x: 0, y: 0, z: 0 }, { id: 'N2', x: 5, y: 0, z: 0 }],
+      },
+      analysis: { data: { forces: {} } },
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    expect(ed['E1']['phi']).toBe(0.85);
+    expect(ed['E1']['phi_b']).toBe(0.9);
+    expect(ed['E1']['btLimit']).toBe(15);
+    expect(ed['E1']['lambdaLimit']).toBe(200);
+  });
+
   test('existing fields in context remain unchanged', () => {
     const input = buildCodeCheckInput({
       traceId: 'test-trace',
