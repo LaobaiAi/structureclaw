@@ -121,6 +121,135 @@ function extractModelSummary(model: Record<string, unknown> | undefined): Record
   };
 }
 
+/**
+ * 从模型和分析结果中提取 elementData，供 Python code-check 层消费。
+ *
+ * 合并三项数据源:
+ *   1. model.elements[] — 构件类型、截面/材料 ID、始末节点
+ *   2. model.sections[] / model.materials[] — 截面/材料属性
+ *   3. analysisResult.data.forces[] — OpenSees 计算的每构件内力
+ *
+ * 返回格式与 gb50017 `_compute_utilization_overrides()` 期望的 elementData 一致。
+ */
+function extractElementDataForCodeCheck(
+  model: Record<string, unknown> | undefined,
+  analysisResult: unknown,
+): Record<string, Record<string, unknown>> {
+  if (!model) return {};
+
+  const elements = Array.isArray(model['elements']) ? model['elements'] as Record<string, unknown>[] : [];
+  const sections = Array.isArray(model['sections']) ? model['sections'] as Record<string, unknown>[] : [];
+  const materials = Array.isArray(model['materials']) ? model['materials'] as Record<string, unknown>[] : [];
+  const nodes = Array.isArray(model['nodes']) ? model['nodes'] as Record<string, unknown>[] : [];
+
+  // unwrap OpenSees AnalysisResponse: { data: { forces: { ... } } }
+  const analysis = analysisResult as Record<string, unknown> | undefined;
+  const data = analysis?.['data'] as Record<string, unknown> | undefined;
+  const rawForces = data?.['forces'] as Record<string, unknown> | undefined;
+  const forces: Record<string, Record<string, unknown>> = {};
+  if (rawForces) {
+    for (const [elemId, value] of Object.entries(rawForces)) {
+      if (value && typeof value === 'object') {
+        forces[elemId] = value as Record<string, unknown>;
+      }
+    }
+  }
+
+  // lookup tables: section/material/node by id
+  const sectionById: Record<string, Record<string, unknown>> = {};
+  for (const s of sections) {
+    if (s && typeof s === 'object' && typeof s['id'] === 'string') {
+      sectionById[s['id']] = s;
+    }
+  }
+  const materialById: Record<string, Record<string, unknown>> = {};
+  for (const m of materials) {
+    if (m && typeof m === 'object' && typeof m['id'] === 'string') {
+      materialById[m['id']] = m;
+    }
+  }
+  const nodeById: Record<string, Record<string, unknown>> = {};
+  for (const n of nodes) {
+    if (n && typeof n === 'object' && typeof n['id'] === 'string') {
+      nodeById[n['id']] = n;
+    }
+  }
+
+  const elementData: Record<string, Record<string, unknown>> = {};
+
+  for (const elem of elements) {
+    if (!elem || typeof elem !== 'object') continue;
+    const elemId = typeof elem['id'] === 'string' ? elem['id'] : '';
+    if (!elemId) continue;
+
+    // section properties
+    const sectionId = String(elem['section'] ?? '');
+    const sectionObj = sectionById[sectionId];
+    const sectionProps = (sectionObj?.['properties'] as Record<string, unknown>) ?? {};
+    const sectionShape = sectionObj?.['shape'] as Record<string, unknown> | undefined;
+
+    // material properties
+    const materialId = String(elem['material'] ?? '');
+    const materialObj = materialById[materialId];
+
+    // forces (take n1 end)
+    const elemForces = forces[elemId];
+    const n1Forces = (elemForces?.['n1'] as Record<string, unknown>) ?? elemForces ?? {};
+
+    // element length from node coordinates (m → mm)
+    const elemNodes = Array.isArray(elem['nodes']) ? (elem['nodes'] as string[]) : [];
+    const nodeStart = elemNodes.length >= 1 ? nodeById[elemNodes[0]!] : undefined;
+    const nodeEnd = elemNodes.length >= 2 ? nodeById[elemNodes[1]!] : undefined;
+    let lengthMm: number | undefined;
+    if (nodeStart && nodeEnd) {
+      const dx = (Number(nodeStart['x'] ?? 0) - Number(nodeEnd['x'] ?? 0));
+      const dy = (Number(nodeStart['y'] ?? 0) - Number(nodeEnd['y'] ?? 0));
+      const dz = (Number(nodeStart['z'] ?? 0) - Number(nodeEnd['z'] ?? 0));
+      lengthMm = Math.sqrt(dx * dx + dy * dy + dz * dz) * 1000; // m → mm
+    }
+
+    // unit conversions: model sections in m²/m⁴ → mm²/mm⁴
+    const A_m2 = Number(sectionProps['A'] ?? 0);
+    const Iy_m4 = Number(sectionProps['Iy'] ?? 0);
+    const Iz_m4 = Number(sectionProps['Iz'] ?? 0);
+    const J_m4 = Number(sectionProps['J'] ?? 0);
+    const A_mm2 = A_m2 * 1e6;
+    const Iy_mm4 = Iy_m4 * 1e12;
+    const Iz_mm4 = Iz_m4 * 1e12;
+    const J_mm4 = J_m4 * 1e12;
+
+    // rotation radius i = sqrt(I / A) in mm
+    const i_min = A_mm2 > 0 ? Math.sqrt(Math.min(Iy_mm4, Iz_mm4) / A_mm2) : undefined;
+
+    elementData[elemId] = {
+      type: elem['type'],
+      section: {
+        A: A_mm2,
+        ...(Iy_mm4 > 0 ? { I: Iy_mm4 } : {}),
+        ...(Iz_mm4 > 0 ? { Iz: Iz_mm4 } : {}),
+        ...(J_mm4 > 0 ? { J: J_mm4 } : {}),
+        ...(i_min !== undefined ? { i: i_min } : {}),
+        ...(sectionObj?.['width'] !== undefined ? { width: sectionObj?.['width'] } : {}),
+        ...(sectionObj?.['height'] !== undefined ? { height: sectionObj?.['height'] } : {}),
+        // preserve G from properties for shear stiffness
+        ...(typeof sectionProps['G'] === 'number' ? { G: sectionProps['G'] } : {}),
+        // preserve shape for local stability checks (b/t)
+        ...(sectionShape ? { shape: sectionShape } : {}),
+      },
+      material: materialObj ? { ...materialObj } : {},
+      forces: {
+        N: n1Forces['N'],
+        V: n1Forces['V'],
+        Mx: n1Forces['M'] ?? n1Forces['Mx'],
+        ...(n1Forces['Mx'] !== undefined ? { Mx: n1Forces['Mx'] } : {}),
+      },
+      ...(lengthMm !== undefined ? { length: lengthMm } : {}),
+    };
+  }
+
+  return elementData;
+}
+
 export function buildCodeCheckInput(options: {
   traceId: string;
   designCode: string;
@@ -135,6 +264,10 @@ export function buildCodeCheckInput(options: {
     : {};
   const parameterUtil = extractUtilizationByElement(options.analysisParameters);
   const utilizationByElement = { ...postprocessedUtil, ...parameterUtil };
+
+  // elementData: 合并 OpenSees 内力 + 模型截面/材料, 供 Python code-check 层真算
+  const elementData = extractElementDataForCodeCheck(options.model, options.analysis);
+
   return {
     modelId: options.traceId,
     code: options.designCode,
@@ -144,6 +277,7 @@ export function buildCodeCheckInput(options: {
       utilizationByElement,
       elementContextById: extractElementContextById(options.model),
       modelSummary: extractModelSummary(options.model),
+      elementData,
     },
   };
 }

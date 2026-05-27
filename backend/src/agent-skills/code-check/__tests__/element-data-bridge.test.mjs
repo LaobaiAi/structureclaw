@@ -1,0 +1,220 @@
+// ============================================================================
+// PR: elementData bridge — unit tests
+// ============================================================================
+
+import { describe, expect, test } from '@jest/globals';
+import { buildCodeCheckInput } from '../../../../dist/agent-skills/code-check/entry.js';
+
+describe('elementData bridge', () => {
+  const makeModel = () => ({
+    schema_version: '2.0.0',
+    elements: [
+      { id: 'C1', type: 'column', nodes: ['N0_0', 'N1_0'], material: '1', section: '1', story: 'F1' },
+      { id: 'B2', type: 'beam',   nodes: ['N1_0', 'N1_1'], material: '1', section: '2', story: 'F1' },
+    ],
+    sections: [
+      {
+        id: '1', name: '500X500', type: 'rectangular', purpose: 'column',
+        width: 500, height: 500,
+        shape: { kind: 'rectangular', B: 500, H: 500 },
+        properties: { A: 0.25, Iy: 0.0052083, Iz: 0.0052083, J: 0.0086, G: 12500 },
+      },
+      {
+        id: '2', name: '300X600', type: 'rectangular', purpose: 'beam',
+        width: 300, height: 600,
+        shape: { kind: 'rectangular', B: 300, H: 600 },
+        properties: { A: 0.18, Iy: 0.0054, Iz: 0.00135, J: 0.004, G: 12500 },
+      },
+    ],
+    materials: [
+      { id: '1', name: 'C30', grade: 'C30', category: 'concrete', E: 30000, nu: 0.2, rho: 2500, fc: 14.3 },
+    ],
+    nodes: [
+      { id: 'N0_0', x: 0, y: 0, z: 0 },
+      { id: 'N1_0', x: 0, y: 0, z: 3.6 },
+      { id: 'N1_1', x: 6, y: 0, z: 3.6 },
+    ],
+    stories: [],
+    load_cases: [{ id: 'LC1', type: 'other', loads: [] }],
+    load_combinations: [{ id: 'ULS', factors: { LC1: 1.0 } }],
+    metadata: { source: 'test' },
+  });
+
+  const makeAnalysisResult = () => ({
+    schema_version: '2.0.0',
+    analysis_type: 'static',
+    success: true,
+    data: {
+      status: 'success',
+      analysisMode: 'opensees_2d_frame',
+      forces: {
+        'C1': {
+          n1: { N: 45200, V: 2100, M: 3400 },
+          n2: { N: -45200, V: -2100, M: -4100 },
+          axial: 45200,
+          stress: 0.18,
+        },
+        'B2': {
+          n1: { N: 1200, V: 18000, M: 54000 },
+          n2: { N: -1200, V: 18000, M: -54000 },
+          axial: 1200,
+          stress: 0.0067,
+        },
+      },
+    },
+  });
+
+  test('elementData is present in buildCodeCheckInput context', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    expect(input.context).toBeDefined();
+    expect(input.context['elementData']).toBeDefined();
+    const ed = input.context['elementData'];
+    expect(typeof ed).toBe('object');
+    expect(ed['C1']).toBeDefined();
+    expect(ed['B2']).toBeDefined();
+  });
+
+  test('elementData has correct type per element', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    expect(ed['C1']['type']).toBe('column');
+    expect(ed['B2']['type']).toBe('beam');
+  });
+
+  test('elementData forces match analysisResult', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    const c1Forces = ed['C1']['forces'];
+    expect(c1Forces['N']).toBe(45200);
+    expect(c1Forces['V']).toBe(2100);
+
+    const b2Forces = ed['B2']['forces'];
+    expect(b2Forces['N']).toBe(1200);
+  });
+
+  test('elementData section.A is converted from m² to mm²', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    const c1Section = ed['C1']['section'];
+    // 0.25 m² × 1e6 = 250000 mm²
+    expect(c1Section['A']).toBeCloseTo(250000, -1);
+  });
+
+  test('elementData has material properties', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    const c1Mat = ed['C1']['material'];
+    expect(c1Mat['fc']).toBe(14.3);
+    expect(c1Mat['E']).toBe(30000);
+  });
+
+  test('elementData has length in mm (from node coordinates)', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    // C1: N0_0(0,0,0) to N1_0(0,0,3.6) → 3.6m → 3600mm
+    expect(ed['C1']['length']).toBeCloseTo(3600, -2);
+    // B2: N1_0(0,0,3.6) to N1_1(6,0,3.6) → 6m → 6000mm
+    expect(ed['B2']['length']).toBeCloseTo(6000, -2);
+  });
+
+  test('elementData is empty object when model has no elements', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: { schema_version: '2.0.0' },
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    expect(Object.keys(ed).length).toBe(0);
+  });
+
+  test('elementData elements exist even when analysis has no forces', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: { data: { forces: {} } },
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    expect(ed['C1']).toBeDefined();
+    expect(ed['C1']['forces']).toBeDefined();
+  });
+
+  test('buildCodeCheckInput works without analysisResult.data', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: {},
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    expect(ed['C1']).toBeDefined();
+    expect(ed['C1']['forces']).toBeDefined();
+  });
+
+  test('existing fields in context remain unchanged', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: makeAnalysisResult(),
+      analysisParameters: {},
+    });
+
+    expect(input.code).toBe('GB50017');
+    expect(input.elements).toContain('C1');
+    expect(input.elements).toContain('B2');
+    expect(input.context['analysisSummary']).toBeDefined();
+    expect(input.context['utilizationByElement']).toBeDefined();
+    expect(input.context['elementContextById']).toBeDefined();
+    expect(input.context['modelSummary']).toBeDefined();
+  });
+});
