@@ -276,4 +276,75 @@ describe('elementData bridge', () => {
     expect(input.context['elementContextById']).toBeDefined();
     expect(input.context['modelSummary']).toBeDefined();
   });
+
+  test('forces use n1/n2 envelope (take max absolute)', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: makeModel(),
+      analysis: {
+        data: {
+          forces: {
+            'C1': {
+              n1: { N: -30000, V: 5000, M: -2000000 },
+              n2: { N: 45000, V: -3000, M: 3500000 },
+            },
+          },
+        },
+      },
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    const f = ed['C1']['forces'];
+    expect(f['N']).toBe(45000);   // abs(n2) > abs(n1)
+    expect(f['V']).toBe(5000);    // abs(n1) > abs(n2)
+    expect(f['Mx']).toBe(3500000); // abs(n2) > abs(n1)
+  });
+
+  test('derives Wnx/S/As/tw from H-section shape when props missing', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: {
+        elements: [{ id: 'E1', type: 'beam', nodes: ['N1', 'N2'], material: '1', section: '1' }],
+        sections: [{
+          id: '1', name: 'H300X150', type: 'H', purpose: 'beam',
+          shape: { kind: 'H', H: 0.3, B: 0.15, tw: 0.0065, tf: 0.009 },
+          properties: { A: 0.00487, Iy: 0.0000721, Iz: 0.00000508, G: 79000 },
+        }],
+        materials: [{ id: '1', E: 206000, fy: 235 }],
+        nodes: [{ id: 'N1', x: 0, y: 0, z: 0 }, { id: 'N2', x: 0, y: 0, z: 3 }],
+      },
+      analysis: { data: { forces: {} } },
+      analysisParameters: {},
+    });
+
+    const ed = input.context['elementData'];
+    const section = ed['E1']['section'];
+    expect(section['Wx']).toBeGreaterThan(0);   // derived from Iy/(H/2)
+    expect(section['S']).toBeGreaterThan(0);     // derived from H/B/tw/tf
+    expect(section['tw']).toBeCloseTo(6.5, 0);   // 0.0065m → 6.5mm
+    expect(section['As']).toBeGreaterThan(0);    // tw × hw
+  });
+
+  test('adds f and fv fallback when material has fy but no f/fv', () => {
+    const input = buildCodeCheckInput({
+      traceId: 'test-trace',
+      designCode: 'GB50017',
+      model: {
+        elements: [{ id: 'E1', type: 'beam', nodes: ['N1', 'N2'], material: '1', section: '1' }],
+        sections: [{ id: '1', properties: { A: 0.005 } }],
+        materials: [{ id: '1', E: 206000, fy: 355 }],  // no f, no fv
+        nodes: [{ id: 'N1', x: 0, y: 0, z: 0 }, { id: 'N2', x: 5, y: 0, z: 0 }],
+      },
+      analysis: { data: { forces: {} } },
+      analysisParameters: {},
+    });
+
+    const mat = input.context['elementData']['E1']['material'];
+    expect(mat['f']).toBe(355);                     // fy used as f
+    expect(mat['fv']).toBeCloseTo(205, -1);         // fy/√3 ≈ 204.9
+    expect(mat['fy']).toBe(355);                    // original fy preserved
+  });
 });

@@ -122,6 +122,16 @@ function extractModelSummary(model: Record<string, unknown> | undefined): Record
 }
 
 /**
+ * Take the larger absolute value of two numbers; returns undefined if both are falsy.
+ */
+function envelopeAbs(a: unknown, b: unknown): number | undefined {
+  const va = typeof a === 'number' ? Math.abs(a) : 0;
+  const vb = typeof b === 'number' ? Math.abs(b) : 0;
+  if (va === 0 && vb === 0) return undefined;
+  return va >= vb ? va : vb;
+}
+
+/**
  * 从模型和分析结果中提取 elementData，供 Python code-check 层消费。
  *
  * 合并三项数据源:
@@ -192,9 +202,15 @@ function extractElementDataForCodeCheck(
     const materialId = String(elem['material'] ?? '');
     const materialObj = materialById[materialId];
 
-    // forces (take n1 end)
+    // forces: n1/n2 envelope (take max absolute per component)
     const elemForces = forces[elemId];
     const n1Forces = (elemForces?.['n1'] as Record<string, unknown>) ?? elemForces ?? {};
+    const n2Forces = (elemForces?.['n2'] as Record<string, unknown>) ?? {};
+    const envelopeN = envelopeAbs(n1Forces['N'], n2Forces['N']);
+    const envelopeV = envelopeAbs(n1Forces['V'], n2Forces['V']);
+    const rawM1 = n1Forces['Mx'] !== undefined ? n1Forces['Mx'] : n1Forces['M'];
+    const rawM2 = n2Forces['Mx'] !== undefined ? n2Forces['Mx'] : n2Forces['M'];
+    const envelopeMx = envelopeAbs(rawM1, rawM2);
 
     // element length from node coordinates (m → mm)
     const elemNodes = Array.isArray(elem['nodes']) ? (elem['nodes'] as string[]) : [];
@@ -230,6 +246,54 @@ function extractElementDataForCodeCheck(
     // rotation radius i = sqrt(I / A) in mm
     const i_min = A_mm2 > 0 ? Math.sqrt(Math.min(Iy_mm4, Iz_mm4) / A_mm2) : undefined;
 
+    // H-section missing props derivation from shape (H/B/tw/tf)
+    let derivedWnxMm3 = Wx_mm3;
+    let derivedS_mm3 = S_mm3;
+    let derivedTw_mm = tw_mm;
+    let derivedAs_mm2 = As_mm2;
+    if (sectionShape && sectionShape['kind'] === 'H') {
+      const H = Number(sectionShape['H'] ?? 0);
+      const B = Number(sectionShape['B'] ?? 0);
+      const tw = Number(sectionShape['tw'] ?? 0);
+      const tf = Number(sectionShape['tf'] ?? 0);
+      if (H > 0 && B > 0 && tw > 0 && tf > 0) {
+        // convert m → mm
+        const Hmm = H * 1000, Bmm = B * 1000, twmm = tw * 1000, tfmm = tf * 1000;
+        const hw = Hmm - 2 * tfmm;
+        if (derivedWnxMm3 <= 0) {
+          // Iy = (tw*hw³)/12 + 2*B*tf*((hw+tf)/2)² — already have Iy_mm4 from props
+          // Wx = Iy / (H/2)
+          derivedWnxMm3 = Iy_mm4 > 0 ? Iy_mm4 / (Hmm / 2) : 0;
+        }
+        if (derivedS_mm3 <= 0) {
+          // S = B*tf*(hw+tf)/2 + tw*(hw/2)²/2
+          const S_flange = Bmm * tfmm * (hw + tfmm) / 2;
+          const S_web = twmm * (hw / 2) * (hw / 4);
+          derivedS_mm3 = S_flange + S_web;
+        }
+        if (derivedTw_mm <= 0) {
+          derivedTw_mm = twmm;
+        }
+        if (derivedAs_mm2 <= 0) {
+          derivedAs_mm2 = twmm * hw;
+        }
+      }
+    }
+
+    // material: fy→f/fv fallback for gb50017 (steel design strength)
+    let materialWithDesign: Record<string, unknown> = materialObj ? { ...materialObj } : {};
+    if (materialObj) {
+      const fy = typeof materialObj['fy'] === 'number' ? materialObj['fy'] : undefined;
+      const hasF = typeof materialObj['f'] === 'number';
+      const hasFv = typeof materialObj['fv'] === 'number';
+      if (!hasF && fy !== undefined) {
+        materialWithDesign['f'] = fy; // conservative: use fy as design strength (f ≤ fy)
+      }
+      if (!hasFv && fy !== undefined) {
+        materialWithDesign['fv'] = Math.round(fy / Math.sqrt(3) * 100) / 100; // fv ≈ 0.577·fy
+      }
+    }
+
     // design parameters from element metadata (phi, lambda limits, etc.)
     const elemMetadata = (typeof elem['metadata'] === 'object' && elem['metadata'] !== null
       ? elem['metadata'] as Record<string, unknown> : {}) as Record<string, unknown>;
@@ -242,22 +306,20 @@ function extractElementDataForCodeCheck(
         ...(Iz_mm4 > 0 ? { Iz: Iz_mm4 } : {}),
         ...(J_mm4 > 0 ? { J: J_mm4 } : {}),
         ...(i_min !== undefined ? { i: i_min } : {}),
-        ...(Wx_mm3 > 0 ? { Wx: Wx_mm3, Wnx: Wx_mm3 } : {}),
-        ...(S_mm3 > 0 ? { S: S_mm3 } : {}),
-        ...(tw_mm > 0 ? { tw: tw_mm } : {}),
-        ...(As_mm2 > 0 ? { As: As_mm2 } : {}),
+        ...(derivedWnxMm3 > 0 ? { Wx: derivedWnxMm3, Wnx: derivedWnxMm3 } : {}),
+        ...(derivedS_mm3 > 0 ? { S: derivedS_mm3 } : {}),
+        ...(derivedTw_mm > 0 ? { tw: derivedTw_mm } : {}),
+        ...(derivedAs_mm2 > 0 ? { As: derivedAs_mm2 } : {}),
         ...(sectionObj?.['width'] !== undefined ? { width: sectionObj?.['width'] } : {}),
         ...(sectionObj?.['height'] !== undefined ? { height: sectionObj?.['height'] } : {}),
-        // preserve G from properties for shear stiffness
         ...(typeof sectionProps['G'] === 'number' ? { G: sectionProps['G'] } : {}),
-        // preserve shape for local stability checks (b/t)
         ...(sectionShape ? { shape: sectionShape } : {}),
       },
-      material: materialObj ? { ...materialObj } : {},
+      material: materialWithDesign,
       forces: {
-        N: n1Forces['N'],
-        V: n1Forces['V'],
-        Mx: n1Forces['Mx'] !== undefined ? n1Forces['Mx'] : n1Forces['M'],
+        ...(envelopeN !== undefined ? { N: envelopeN } : {}),
+        ...(envelopeV !== undefined ? { V: envelopeV } : {}),
+        ...(envelopeMx !== undefined ? { Mx: envelopeMx } : {}),
       },
       ...(lengthMm !== undefined ? { length: lengthMm } : {}),
       // design parameters (optionally passed via element metadata or element itself)
