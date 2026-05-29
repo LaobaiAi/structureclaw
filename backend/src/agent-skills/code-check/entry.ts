@@ -281,18 +281,20 @@ function extractElementDataForCodeCheck(
     }
 
     // material: fy→f/fv fallback for gb50017 (steel design strength)
-    let materialWithDesign: Record<string, unknown> = materialObj ? { ...materialObj } : {};
-    if (materialObj) {
+    const materialWithDesign: Record<string, unknown> = ((): Record<string, unknown> => {
+      if (!materialObj) return {};
+      const base = { ...materialObj };
       const fy = typeof materialObj['fy'] === 'number' ? materialObj['fy'] : undefined;
       const hasF = typeof materialObj['f'] === 'number';
       const hasFv = typeof materialObj['fv'] === 'number';
       if (!hasF && fy !== undefined) {
-        materialWithDesign['f'] = fy; // conservative: use fy as design strength (f ≤ fy)
+        base['f'] = fy; // conservative: use fy as design strength (f ≤ fy)
       }
       if (!hasFv && fy !== undefined) {
-        materialWithDesign['fv'] = Math.round(fy / Math.sqrt(3) * 100) / 100; // fv ≈ 0.577·fy
+        base['fv'] = Math.round(fy / Math.sqrt(3) * 100) / 100; // fv ≈ 0.577·fy
       }
-    }
+      return base;
+    })();
 
     // design parameters from element metadata (phi, lambda limits, etc.)
     const elemMetadata = (typeof elem['metadata'] === 'object' && elem['metadata'] !== null
