@@ -1,9 +1,9 @@
-\"\"\"GB50010-2010 混凝土结构设计规范 — 构件校核实现。
+"""GB50010-2010 混凝土结构设计规范 — 构件校核实现。
 
 覆盖第 6 章（承载能力极限状态）、第 7 章（构造与稳定）中梁、柱的
 构件级验算。采用 gb50017 范式：_compute_utilization_overrides()
 从 elementData 读取 OpenSees 真实内力，计算实际利用率。
-\"\"\"
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -93,13 +93,13 @@ def _resolve_material_props(
     rebar_grade: str | None,
     elem_data: Dict[str, Any],
 ) -> Dict[str, float]:
-    \"\"\"Resolve full concrete/rebar design properties.
+    """Resolve full concrete/rebar design properties.
 
     Prefers values from elementData.material (model design values from
     concrete-frame material records). Falls back to built-in lookup table
     when elementData is incomplete (e.g. for analysis engines that don't
     populate full design values).
-    \"\"\"
+    """
     material_raw = elem_data.get('material', {})
     material = material_raw if isinstance(material_raw, dict) else {}
 
@@ -154,7 +154,7 @@ _STABILITY_COEFF_TABLE: List[tuple[float, float]] = [
 
 
 def _stability_coeff(l0b: float) -> float:
-    \"\"\"Axial compression stability coefficient φ (GB50010-2010 Table 6.2.15).\"\"\"
+    """Axial compression stability coefficient φ (GB50010-2010 Table 6.2.15)."""
     if l0b <= 8:
         return 1.00
     if l0b >= 30:
@@ -170,14 +170,14 @@ def _stability_coeff(l0b: float) -> float:
 def _compute_utilization_overrides(
     elem_id: str, context: Dict[str, Any],
 ) -> Dict[str, float]:
-    \"\"\"Compute utilization ratios from elementData for GB50010.
+    """Compute utilization ratios from elementData for GB50010.
 
     Reads OpenSees real forces (N, V, Mx), section geometry (b, h, A, I),
     and material grades from elementContextById to compute actual
     utilization ratios per GB50010-2010 formulas.
 
     Returns a new dict of computed overrides. Does NOT mutate context.
-    \"\"\"
+    """
     element_data = context.get('elementData', {})
     if not isinstance(element_data, dict):
         return {}
@@ -281,7 +281,7 @@ def _compute_utilization_overrides(
                 As_total = rho_min * A
 
             # Section capacity estimates
-            N_capacity = 0.9 * mat['fc'] * A  # kN
+            N_capacity = 0.9 * mat['fc'] * A / 1000.0  # N → kN
             M_capacity = 0.9 * mat['fy'] * As_total * h0 / 1e6  # kN·m
 
             # Simplified linear interaction: N/Nu + M/Mu
@@ -505,12 +505,12 @@ def _check_column(checker: Any, elem_id: str, context: Dict[str, Any]) -> List[D
 
 
 def check_element(checker: Any, elem_id: str, context: Dict[str, Any]) -> Dict[str, Any]:
-    \"\"\"GB50010-2010 构件校核入口 — gb50017 范式。
+    """GB50010-2010 构件校核入口 — gb50017 范式。
 
     1. 从 elementData 计算真实利用率 (_compute_utilization_overrides)
     2. 合并到 utilizationByElement 并构建 enriched context
     3. elementData 为空时优雅回退（保留原有确定性 fallback 行为）
-    \"\"\"
+    """
     element_context = _resolve_element_context(elem_id, context)
     element_type = _resolve_element_type(elem_id, context)
 

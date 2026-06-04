@@ -195,7 +195,7 @@ describe('PR2: concrete-frame member generation', () => {
         };
 
         const columns = generateColumns(input);
-        const bottom = columns[storyCount - 1];
+        const bottom = columns[0];
         expect(bottom.widthMM).toBe(expectedSize);
       });
     });
@@ -212,7 +212,7 @@ describe('PR2: concrete-frame member generation', () => {
       };
 
       const columns = generateColumns(input);
-      const bottom = columns[29];
+      const bottom = columns[0];
       expect(bottom.widthMM).toBeGreaterThanOrEqual(900);
       expect(bottom.axialLoadRatio).toBeLessThanOrEqual(0.9);
     });

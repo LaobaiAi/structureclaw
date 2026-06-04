@@ -191,7 +191,7 @@ export function generateColumns(input: ConcreteFrameInput): ConcreteColumn[] {
   for (let story = 0; story < storyCount; story++) {
     const heightM = storyHeightsM[story] ?? 3.6;
 
-    const storyN_N = (baseLoadKN * (story + 1) / storyCount) * 1000;
+    const storyN_N = (baseLoadKN * (storyCount - story) / storyCount) * 1000;
     const storyAc = storyN_N / (axialLoadRatioLimit * fc);
 
     if (columnType === 'circular') {

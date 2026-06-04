@@ -23,6 +23,15 @@ class MockCodeChecker:
         raw = per_elem.get(item_name)
         if isinstance(raw, (int, float)):
             return max(0.0, float(raw))
+        # Fallback: read computed overrides from context (set by
+        # _compute_utilization_overrides + check_element merge)
+        ube = context.get('utilizationByElement', {})
+        if isinstance(ube, dict):
+            per_elem_ctx = ube.get(elem_id, {})
+            if isinstance(per_elem_ctx, dict):
+                raw = per_elem_ctx.get(item_name)
+                if isinstance(raw, (int, float)):
+                    return max(0.0, float(raw))
         return 0.55
 
     def _calc_item(self, elem_id, item_name, context, clause, formula, limit):
@@ -207,11 +216,11 @@ class TestCheckElementResult:
 
 
 class TestComputedUtilizationOverrides:
-    \"\"\"Integration tests: verify _compute_utilization_overrides produces real
-    utilization values from elementData (mirrors gb50017 paradigm).\"\"\"
+    """Integration tests: verify _compute_utilization_overrides produces real
+    utilization values from elementData (mirrors gb50017 paradigm)."""
 
     def _make_concrete_element_data(self, **overrides):
-        \"\"\"Build elementData dict for a rectangular concrete element.\"\"\"
+        """Build elementData dict for a rectangular concrete element."""
         base = {
             'type': 'beam',
             'section': {
@@ -248,7 +257,7 @@ class TestComputedUtilizationOverrides:
         }
 
     def test_beam_flexure_computes_real_value(self):
-        \"\"\"正截面受弯: elementData with real Mx → computed utilization.\"\"\"
+        """正截面受弯: elementData with real Mx → computed utilization."""
         elem_data = self._make_concrete_element_data()
         context = self._make_context(elem_data)
         computed = gb50010._compute_utilization_overrides('B1', context)
@@ -257,7 +266,7 @@ class TestComputedUtilizationOverrides:
         assert computed['正截面受弯'] > 0
 
     def test_beam_shear_computes_real_value(self):
-        \"\"\"斜截面受剪: V=100kN on 300×500 beam → realistic utilization.\"\"\"
+        """斜截面受剪: V=100kN on 300×500 beam → realistic utilization."""
         elem_data = self._make_concrete_element_data(forces={'N': 0, 'V': 100000, 'Mx': 50e6})
         context = self._make_context(elem_data)
         computed = gb50010._compute_utilization_overrides('B1', context)
@@ -266,7 +275,7 @@ class TestComputedUtilizationOverrides:
         assert computed['斜截面受剪'] > 0
 
     def test_column_axial_ratio_from_element_data(self):
-        \"\"\"轴压比: N=1000kN, 400×400 C30 column → computed ratio.\"\"\"
+        """轴压比: N=1000kN, 400×400 C30 column → computed ratio."""
         elem_data = self._make_concrete_element_data(
             type='column',
             section={'width': 400, 'height': 400, 'A': 160000, 'Iy': 2.133e9,
@@ -281,7 +290,7 @@ class TestComputedUtilizationOverrides:
         assert 0.3 < computed['轴压比'] < 0.7
 
     def test_column_slenderness_computes_from_geometry(self):
-        \"\"\"长细比: l=3600mm, 400×400 section → λ computation.\"\"\"
+        """长细比: l=3600mm, 400×400 section → λ computation."""
         elem_data = self._make_concrete_element_data(
             type='column',
             section={'width': 400, 'height': 400, 'A': 160000, 'Iy': 2.133e9,
@@ -296,18 +305,18 @@ class TestComputedUtilizationOverrides:
         assert computed['长细比'] > 0
 
     def test_empty_element_data_returns_empty_dict(self):
-        \"\"\"No elementData → no computed overrides — graceful fallback.\"\"\"
+        """No elementData → no computed overrides — graceful fallback."""
         computed = gb50010._compute_utilization_overrides('B1', {})
         assert computed == {}
 
     def test_missing_element_id_returns_empty_dict(self):
-        \"\"\"elementData exists but element ID not found → safe return.\"\"\"
+        """elementData exists but element ID not found → safe return."""
         context = {'elementData': {'OTHER': {'type': 'beam'}}}
         computed = gb50010._compute_utilization_overrides('B1', context)
         assert computed == {}
 
     def test_material_fallback_from_element_data_when_no_context_grades(self):
-        \"\"\"When elementContextById has no grades, fall back to elementData.material.\"\"\"
+        """When elementContextById has no grades, fall back to elementData.material."""
         elem_data = self._make_concrete_element_data(
             material={'fc': 14.3, 'fy': 360, 'E': 30000},
         )
@@ -319,7 +328,7 @@ class TestComputedUtilizationOverrides:
         assert '正截面受弯' in computed
 
     def test_beam_deflection_uses_element_data(self):
-        \"\"\"挠度: Mx + length + section → simplified deflection ratio.\"\"\"
+        """挠度: Mx + length + section → simplified deflection ratio."""
         elem_data = self._make_concrete_element_data(
             forces={'N': 0, 'V': 50000, 'Mx': 30e6},
             length=6000,
@@ -331,7 +340,7 @@ class TestComputedUtilizationOverrides:
         assert computed['挠度'] > 0
 
     def test_eccentric_compression_with_moment(self):
-        \"\"\"偏心受压: N + Mx → N-M interaction utilization.\"\"\"
+        """偏心受压: N + Mx → N-M interaction utilization."""
         elem_data = self._make_concrete_element_data(
             type='column',
             section={'width': 400, 'height': 400, 'A': 160000, 'Iy': 2.133e9,
@@ -346,8 +355,8 @@ class TestComputedUtilizationOverrides:
         assert computed['偏心受压'] > 0
 
     def test_check_element_uses_real_values_via_merged_context(self):
-        \"\"\"End-to-end: check_element with elementData → real utilization
-        flows through _calc_item instead of mock 0.55 default.\"\"\"
+        """End-to-end: check_element with elementData → real utilization
+        flows through _calc_item instead of mock 0.55 default."""
         elem_data = self._make_concrete_element_data(
             forces={'N': 0, 'V': 100000, 'Mx': 50e6},
         )
@@ -366,7 +375,7 @@ class TestComputedUtilizationOverrides:
         assert flexure_item['utilization'] > 0
 
     def test_crack_width_computes_real_value(self):
-        \"\"\"裂缝宽度: Mx+geometry → ω_max/w_lim  utilization.\"\"\"
+        """裂缝宽度: Mx+geometry → ω_max/w_lim  utilization."""
         elem_data = self._make_concrete_element_data(
             section={'width': 300, 'height': 500, 'A': 150000, 'Iy': 3.125e9,
                      'shape': {'kind': 'rectangular', 'B': 0.3, 'H': 0.5}},
@@ -382,8 +391,8 @@ class TestComputedUtilizationOverrides:
         assert computed['裂缝宽度'] > 0
 
     def test_material_design_values_from_element_data(self):
-        \"\"\"When elementData has full concrete design values (ft/ftk/Ec/alpha1/
-        beta1/ecu), _resolve_material_props uses them directly — not lookup.\"\"\"
+        """When elementData has full concrete design values (ft/ftk/Ec/alpha1/
+        beta1/ecu), _resolve_material_props uses them directly — not lookup."""
         elem_data = self._make_concrete_element_data(
             material={
                 'fc': 23.1, 'ft': 1.89, 'ftk': 2.64, 'Ec': 34500, 'E': 34500,
@@ -399,7 +408,7 @@ class TestComputedUtilizationOverrides:
         assert mat['beta1'] == 0.78
 
     def test_material_falls_back_when_element_data_incomplete(self):
-        \"\"\"When elementData has only fc, fall back to lookup table for others.\"\"\"
+        """When elementData has only fc, fall back to lookup table for others."""
         elem_data = self._make_concrete_element_data(
             material={'fc': 14.3},  # only fc, no ft/ftk/etc.
         )
