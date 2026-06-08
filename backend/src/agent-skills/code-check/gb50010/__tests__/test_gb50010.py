@@ -89,10 +89,10 @@ class TestCheckElementStructure:
         result = gb50010.check_element(checker, 'B1', {})
         assert isinstance(result, dict)
 
-    def test_two_check_groups(self):
+    def test_beam_has_three_check_groups(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
-        assert len(result['checks']) == 2
+        assert len(result['checks']) == 3
 
     def test_bearing_capacity_group(self):
         checker = MockCodeChecker()
@@ -101,12 +101,20 @@ class TestCheckElementStructure:
         assert group1['name'] == '承载力验算'
         assert len(group1['items']) == 2
 
-    def test_serviceability_group(self):
+    def test_construction_group(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
         group2 = result['checks'][1]
-        assert group2['name'] == '正常使用验算'
-        assert len(group2['items']) == 2
+        assert group2['name'] == '构造验算'
+        assert len(group2['items']) == 1
+        assert group2['items'][0]['item'] == '钢筋净距'
+
+    def test_serviceability_group(self):
+        checker = MockCodeChecker()
+        result = gb50010.check_element(checker, 'B1', {})
+        group3 = result['checks'][2]
+        assert group3['name'] == '正常使用验算'
+        assert len(group3['items']) == 2
 
 
 class TestClauseReferences:
@@ -126,13 +134,13 @@ class TestClauseReferences:
     def test_deflection_clause(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
-        items = result['checks'][1]['items']
+        items = result['checks'][2]['items']
         assert items[0]['clause'] == 'GB50010-2010 3.3.2'
 
     def test_crack_clause(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
-        items = result['checks'][1]['items']
+        items = result['checks'][2]['items']
         assert items[1]['clause'] == 'GB50010-2010 3.4.5'
 
 
@@ -230,7 +238,7 @@ class TestComputedUtilizationOverrides:
             'material': {'fc': 14.3, 'fy': 360, 'E': 30000, 'nu': 0.2, 'rho': 2500},
             'forces': {'N': 0, 'V': 100000, 'Mx': 50e6},
             'length': 6000,
-            # Rebar design — from model element metadata (PR4)
+            # Rebar design — from model element metadata
             'As': 628,         # 2Φ20
             'Asv': 101,        # 2-leg Φ8
             'stirrup_dia': 8,
@@ -417,6 +425,57 @@ class TestComputedUtilizationOverrides:
         assert mat['ft'] == 1.43  # from C30 lookup
         assert mat['ftk'] == 2.01  # from C30 lookup
         assert mat['alpha1'] == 1.0  # from C30 lookup
+
+    def test_beam_rebar_spacing_from_element_data(self):
+        """钢筋净距(beam): sn=40mm with main_dia=20 → limit=max(30,30)=30 → util=30/40=0.75."""
+        elem_data = self._make_concrete_element_data(
+            bar_count=3, sn=40, main_dia=20,
+        )
+        context = self._make_context(elem_data)
+        computed = gb50010._compute_utilization_overrides('B1', context)
+        assert '钢筋净距' in computed
+        assert isinstance(computed['钢筋净距'], float)
+        # sn_limit = max(1.5*20, 30) = 30, sn=40 → util = 30/40 = 0.75
+        assert computed['钢筋净距'] == pytest.approx(0.75, rel=0.01)
+
+    def test_beam_rebar_spacing_violation(self):
+        """钢筋净距(beam): sn=15mm with main_dia=20 → limit=30 → util=30/15=2.0 (fail)."""
+        elem_data = self._make_concrete_element_data(
+            bar_count=4, sn=15, main_dia=20,
+        )
+        context = self._make_context(elem_data)
+        computed = gb50010._compute_utilization_overrides('B1', context)
+        assert '钢筋净距' in computed
+        assert computed['钢筋净距'] > 1.0
+
+    def test_column_rebar_spacing_from_element_data(self):
+        """钢筋净距(column): sn=60mm with main_dia=20 → limit=max(30,50)=50 → util=50/60≈0.833."""
+        elem_data = self._make_concrete_element_data(
+            type='column', bar_count=8, sn=60, main_dia=20,
+        )
+        context = self._make_context(elem_data, elem_type='column')
+        computed = gb50010._compute_utilization_overrides('B1', context)
+        assert '钢筋净距' in computed
+        assert isinstance(computed['钢筋净距'], float)
+        # sn_limit = max(1.5*20, 50) = 50, sn=60 → util = 50/60 ≈ 0.833
+        assert computed['钢筋净距'] == pytest.approx(0.833, rel=0.01)
+
+    def test_column_rebar_spacing_violation(self):
+        """钢筋净距(column): sn=40mm with main_dia=20 → limit=50 → util=50/40=1.25."""
+        elem_data = self._make_concrete_element_data(
+            type='column', bar_count=6, sn=40, main_dia=20,
+        )
+        context = self._make_context(elem_data, elem_type='column')
+        computed = gb50010._compute_utilization_overrides('B1', context)
+        assert '钢筋净距' in computed
+        assert computed['钢筋净距'] > 1.0
+
+    def test_rebar_spacing_skips_when_no_bar_count(self):
+        """No bar_count → 钢筋净距 not computed."""
+        elem_data = self._make_concrete_element_data(bar_count=None, sn=40, main_dia=20)
+        context = self._make_context(elem_data)
+        computed = gb50010._compute_utilization_overrides('B1', context)
+        assert '钢筋净距' not in computed
 
 
 if __name__ == '__main__':
