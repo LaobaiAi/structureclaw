@@ -203,7 +203,7 @@ def _compute_utilization_overrides(
     A_mm2 = section.get('A')
     I_min = section.get('I') or section.get('Iy')
 
-    # Rebar design — from model element metadata (concrete-frame PR4) or compute minimums
+    # Rebar design — from model element metadata, or computed minimums
     As_design = elem.get('As')               # total rebar area (mm²) — model design value
     Asv_design = elem.get('Asv')             # stirrup area (mm²)
     stirrup_dia = elem.get('stirrup_dia')    # stirrup diameter (mm)
@@ -434,6 +434,22 @@ def _compute_utilization_overrides(
         except (ZeroDivisionError, ValueError, TypeError):
             pass
 
+    # 钢筋净距 (§9.2.1 beam / §9.3.1 column): s_n >= limit
+    bar_count = elem.get('bar_count')
+    sn = elem.get('sn')
+    main_dia = elem.get('main_dia')
+    if isinstance(bar_count, (int, float)) and isinstance(sn, (int, float)) and isinstance(main_dia, (int, float)):
+        try:
+            elem_type = _resolve_element_type(elem_id, context)
+            if elem_type == 'column':
+                sn_limit = max(1.5 * float(main_dia), 50.0)  # §9.3.1
+            else:
+                sn_limit = max(1.5 * float(main_dia), 30.0)  # §9.2.1 (top bars, conservative)
+            if sn_limit > 0 and float(sn) > 0:
+                computed['钢筋净距'] = sn_limit / float(sn)
+        except (ZeroDivisionError, ValueError, TypeError):
+            pass
+
     return computed
 
 
@@ -474,6 +490,13 @@ def _check_beam(checker: Any, elem_id: str, context: Dict[str, Any]) -> List[Dic
             ],
         },
         {
+            'chapter': '第9章 构造规定',
+            'name': '构造验算',
+            'items': [
+                checker._calc_item(elem_id, '钢筋净距', context, 'GB50010-2010 9.2.1', 's_n >= max(1.5d, 30)', 1.0),
+            ],
+        },
+        {
             'name': '正常使用验算',
             'items': [
                 checker._calc_item(elem_id, '挠度', context, 'GB50010-2010 3.3.2', 'f <= l/250', 1.0),
@@ -499,6 +522,7 @@ def _check_column(checker: Any, elem_id: str, context: Dict[str, Any]) -> List[D
             'name': '柱稳定与构造验算',
             'items': [
                 checker._calc_item(elem_id, '长细比', context, 'GB50010-2010 6.2.20', 'l0/i <= 限值', 1.0),
+                checker._calc_item(elem_id, '钢筋净距', context, 'GB50010-2010 9.3.1', 's_n >= max(1.5d, 50)', 1.0),
             ],
         },
     ]
