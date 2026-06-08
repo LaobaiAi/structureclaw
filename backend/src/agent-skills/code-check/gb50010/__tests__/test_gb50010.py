@@ -477,6 +477,16 @@ class TestComputedUtilizationOverrides:
         computed = gb50010._compute_utilization_overrides('B1', context)
         assert '钢筋净距' not in computed
 
+    def test_rebar_spacing_fails_on_zero_or_negative_sn(self):
+        """sn=0 with bar_count>1 → utilization=99.0 (physically impossible layout)."""
+        elem_data = self._make_concrete_element_data(
+            bar_count=3, sn=0, main_dia=20,
+        )
+        context = self._make_context(elem_data)
+        computed = gb50010._compute_utilization_overrides('B1', context)
+        assert '钢筋净距' in computed
+        assert computed['钢筋净距'] == 99.0
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

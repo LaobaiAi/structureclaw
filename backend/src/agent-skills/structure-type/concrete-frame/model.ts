@@ -1098,7 +1098,9 @@ export function buildConcreteFrameModel(
   const colBarArea = Math.PI * colMainDia * colMainDia / 4;
   const colBarCount = Math.max(4, Math.ceil(colAs / colBarArea));
   // GB50010-2010 §9.3.1: 净距 sₙ per side face
-  const colBarCountPerSide = Math.max(2, Math.ceil(colBarCount / 4));
+  // Corner bars are shared between adjacent sides.
+  // ceil(total/4) gives spaces per side; +1 for the corner bar at far end.
+  const colBarCountPerSide = Math.ceil(colBarCount / 4) + 1;
   const colMinSide = Math.min(colB, colH);
   const colAvailableWidth = colMinSide - 2 * (20 + 8); // cover + stirrup on both sides
   const colSn = colBarCountPerSide > 1

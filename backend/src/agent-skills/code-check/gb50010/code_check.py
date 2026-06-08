@@ -445,8 +445,11 @@ def _compute_utilization_overrides(
                 sn_limit = max(1.5 * float(main_dia), 50.0)  # §9.3.1
             else:
                 sn_limit = max(1.5 * float(main_dia), 30.0)  # §9.2.1 (top bars, conservative)
-            if sn_limit > 0 and float(sn) > 0:
-                computed['钢筋净距'] = sn_limit / float(sn)
+            if sn_limit > 0:
+                if float(sn) > 0:
+                    computed['钢筋净距'] = sn_limit / float(sn)
+                elif float(bar_count) > 1:
+                    computed['钢筋净距'] = 99.0  # physically impossible layout → fail
         except (ZeroDivisionError, ValueError, TypeError):
             pass
 
