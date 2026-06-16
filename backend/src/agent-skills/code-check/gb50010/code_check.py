@@ -19,12 +19,12 @@ def get_rules() -> Dict[str, Any]:
             {
                 'name': '梁承载力与正常使用验算',
                 'elementType': ['beam'],
-                'checks': ['正截面受弯', '斜截面受剪', '挠度', '裂缝宽度'],
+                'checks': ['正截面受弯', '斜截面受剪', '钢筋净距', '挠度', '裂缝宽度'],
             },
             {
                 'name': '柱承载力与稳定验算',
                 'elementType': ['column'],
-                'checks': ['轴压比', '偏心受压', '斜截面受剪', '长细比'],
+                'checks': ['轴压比', '偏心受压', '斜截面受剪', '长细比', '钢筋净距'],
             },
         ],
     }
@@ -482,6 +482,21 @@ def _build_chapter_summaries(checks: List[Dict[str, Any]]) -> List[Dict[str, Any
     return chapters
 
 
+def _has_spacing_metadata(elem_id: str, context: Dict[str, Any]) -> bool:
+    """Check whether the element has complete rebar spacing metadata in elementData."""
+    element_data = context.get('elementData', {})
+    if not isinstance(element_data, dict):
+        return False
+    elem = element_data.get(elem_id)
+    if not isinstance(elem, dict):
+        return False
+    return (
+        isinstance(elem.get('bar_count'), (int, float))
+        and isinstance(elem.get('sn'), (int, float))
+        and isinstance(elem.get('main_dia'), (int, float))
+    )
+
+
 def _check_beam(checker: Any, elem_id: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         {
@@ -492,13 +507,13 @@ def _check_beam(checker: Any, elem_id: str, context: Dict[str, Any]) -> List[Dic
                 checker._calc_item(elem_id, '斜截面受剪', context, 'GB50010-2010 6.3.1', 'V <= Vc + Vs', 0.95),
             ],
         },
-        {
+        *([{
             'chapter': '第9章 构造规定',
             'name': '构造验算',
             'items': [
                 checker._calc_item(elem_id, '钢筋净距', context, 'GB50010-2010 9.2.1', 's_n >= max(1.5d, 30)', 1.0),
             ],
-        },
+        }] if _has_spacing_metadata(elem_id, context) else []),
         {
             'name': '正常使用验算',
             'items': [
@@ -525,7 +540,8 @@ def _check_column(checker: Any, elem_id: str, context: Dict[str, Any]) -> List[D
             'name': '柱稳定与构造验算',
             'items': [
                 checker._calc_item(elem_id, '长细比', context, 'GB50010-2010 6.2.20', 'l0/i <= 限值', 1.0),
-                checker._calc_item(elem_id, '钢筋净距', context, 'GB50010-2010 9.3.1', 's_n >= max(1.5d, 50)', 1.0),
+                *([checker._calc_item(elem_id, '钢筋净距', context, 'GB50010-2010 9.3.1', 's_n >= max(1.5d, 50)', 1.0)]
+                  if _has_spacing_metadata(elem_id, context) else []),
             ],
         },
     ]

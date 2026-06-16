@@ -81,6 +81,11 @@ class TestGetRules:
         assert rules[0]['elementType'] == ['beam']
         assert rules[1]['elementType'] == ['column']
 
+    def test_rules_include_rebar_spacing(self):
+        rules = gb50010.get_rules()['rules']
+        assert '钢筋净距' in rules[0]['checks']  # beam
+        assert '钢筋净距' in rules[1]['checks']  # column
+
 
 class TestCheckElementStructure:
 
@@ -89,9 +94,27 @@ class TestCheckElementStructure:
         result = gb50010.check_element(checker, 'B1', {})
         assert isinstance(result, dict)
 
-    def test_beam_has_three_check_groups(self):
+    def test_beam_without_spacing_metadata_skips_construction_group(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
+        # No elementData → no spacing metadata → only 2 groups (承载力 + 正常使用)
+        assert len(result['checks']) == 2
+        assert result['checks'][0]['name'] == '承载力验算'
+        assert result['checks'][1]['name'] == '正常使用验算'
+
+    def test_beam_with_spacing_metadata_has_construction_group(self):
+        elem_data = {
+            'type': 'beam',
+            'section': {'width': 300, 'height': 500, 'A': 150000, 'Iy': 3.125e9},
+            'material': {'fc': 14.3, 'fy': 360, 'E': 30000},
+            'forces': {'N': 0, 'V': 100000, 'Mx': 50e6},
+            'length': 6000,
+            'bar_count': 3, 'sn': 40, 'main_dia': 20,
+            'As': 628, 'Asv': 101, 'stirrup_dia': 8, 'stirrup_spacing': 200, 'cover': 20, 'crack_cover': 25,
+        }
+        context = {'elementData': {'B1': elem_data}}
+        checker = MockCodeChecker()
+        result = gb50010.check_element(checker, 'B1', context)
         assert len(result['checks']) == 3
 
     def test_bearing_capacity_group(self):
@@ -102,8 +125,18 @@ class TestCheckElementStructure:
         assert len(group1['items']) == 2
 
     def test_construction_group(self):
+        elem_data = {
+            'type': 'beam',
+            'section': {'width': 300, 'height': 500, 'A': 150000, 'Iy': 3.125e9},
+            'material': {'fc': 14.3, 'fy': 360, 'E': 30000},
+            'forces': {'N': 0, 'V': 100000, 'Mx': 50e6},
+            'length': 6000,
+            'bar_count': 3, 'sn': 40, 'main_dia': 20,
+            'As': 628, 'Asv': 101, 'stirrup_dia': 8, 'stirrup_spacing': 200, 'cover': 20, 'crack_cover': 25,
+        }
+        context = {'elementData': {'B1': elem_data}}
         checker = MockCodeChecker()
-        result = gb50010.check_element(checker, 'B1', {})
+        result = gb50010.check_element(checker, 'B1', context)
         group2 = result['checks'][1]
         assert group2['name'] == '构造验算'
         assert len(group2['items']) == 1
@@ -112,9 +145,10 @@ class TestCheckElementStructure:
     def test_serviceability_group(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
-        group3 = result['checks'][2]
-        assert group3['name'] == '正常使用验算'
-        assert len(group3['items']) == 2
+        # no elementData → 2 groups → serviceability at index [1]
+        group2 = result['checks'][1]
+        assert group2['name'] == '正常使用验算'
+        assert len(group2['items']) == 2
 
 
 class TestClauseReferences:
@@ -134,13 +168,13 @@ class TestClauseReferences:
     def test_deflection_clause(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
-        items = result['checks'][2]['items']
+        items = result['checks'][1]['items']  # no elementData → 2 groups
         assert items[0]['clause'] == 'GB50010-2010 3.3.2'
 
     def test_crack_clause(self):
         checker = MockCodeChecker()
         result = gb50010.check_element(checker, 'B1', {})
-        items = result['checks'][2]['items']
+        items = result['checks'][1]['items']  # no elementData → 2 groups
         assert items[1]['clause'] == 'GB50010-2010 3.4.5'
 
 
