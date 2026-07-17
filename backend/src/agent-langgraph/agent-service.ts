@@ -57,6 +57,7 @@ export interface LangGraphRunInput {
     engineId?: string;
     designCode?: string;
     includeReport?: boolean;
+    seismicWorkflow?: Record<string, unknown>;
     attachments?: AttachmentInfo[];
   };
 }
@@ -83,11 +84,17 @@ type HumanMessageContentBlock =
 interface InitialHumanMessagePayload {
   content: string | HumanMessageContentBlock[];
   canonicalMessage: string;
+  attachmentAnalyses: AttachmentAnalysis[];
 }
 
 interface InitialHumanMessageOptions {
   summarizeImages?: boolean;
   signal?: AbortSignal;
+}
+
+export interface AttachmentAnalysis {
+  attachment: AttachmentInfo;
+  analysis: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +131,278 @@ function compactAttachmentAnalysis(analysis: Record<string, unknown>): Record<st
       : 'Image binary is parsed only by the configured vision model; the main agent receives text summaries only.';
   }
   return rest;
+}
+
+function compactAttachmentAnalysisMetadata(analysis: Record<string, unknown>): Record<string, unknown> {
+  const rest = compactAttachmentAnalysis(analysis);
+  delete rest.rows;
+  delete rest.content;
+  delete rest.text;
+  delete rest.csv;
+  delete rest.at2;
+  delete rest.data;
+  delete rest.sheets;
+  return rest;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function attachmentSummary(attachment: AttachmentInfo): Record<string, unknown> {
+  return {
+    fileId: attachment.fileId,
+    originalName: attachment.originalName,
+    relPath: attachment.relPath,
+    ...(attachment.mimeType ? { mimeType: attachment.mimeType } : {}),
+  };
+}
+
+function analysisRowsRecord(
+  attachment: AttachmentInfo,
+  analysis: Record<string, unknown>,
+  idSuffix?: string,
+): Record<string, unknown> | null {
+  const rows = analysis.rows;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+  const sheetLabel = idSuffix ? `:${idSuffix}` : '';
+  return {
+    id: `${attachment.fileId || attachment.relPath || attachment.originalName}${sheetLabel}`,
+    name: idSuffix ? `${attachment.originalName}:${idSuffix}` : attachment.originalName,
+    recordType: 'actual',
+    source: 'uploaded_attachment',
+    fileId: attachment.fileId,
+    relPath: attachment.relPath,
+    ...(idSuffix ? { sheetName: idSuffix } : {}),
+    ...(Array.isArray(analysis.headers) ? { headers: analysis.headers } : {}),
+    rows,
+    fileAnalysis: compactAttachmentAnalysisMetadata(analysis),
+  };
+}
+
+function finiteCellNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function numericRows(rows: unknown): number[][] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => Array.isArray(row)
+      ? row.map(finiteCellNumber).filter((value): value is number => value !== null)
+      : [])
+    .filter((row) => row.length > 0);
+}
+
+function normalizeHeader(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isNumericHeaderRow(headers: unknown): boolean {
+  return Array.isArray(headers)
+    && headers.length > 0
+    && headers.every((header) => finiteCellNumber(header) !== null);
+}
+
+function hasMotionHeaders(headers: unknown): boolean {
+  if (!Array.isArray(headers)) return false;
+  const normalized = headers.map(normalizeHeader);
+  const hasTime = normalized.some((header) =>
+    ['time', 't', 'sec', 'second', 'seconds'].includes(header)
+    || header.includes('time')
+    || header.includes('(s)'));
+  const hasAcceleration = normalized.some((header) =>
+    ['acc', 'ag', 'a', 'gal', 'g'].includes(header)
+    || header.includes('accel')
+    || header.includes('acceler')
+    || header.includes('cm/s')
+    || header.includes('m/s'));
+  return hasTime && hasAcceleration;
+}
+
+function hasClearlyNonMotionHeaders(headers: unknown): boolean {
+  if (!Array.isArray(headers)) return false;
+  const normalized = headers.map(normalizeHeader).join(' ');
+  return [
+    'story',
+    'floor',
+    'load',
+    'force',
+    'node',
+    'element',
+    'member',
+    'beam',
+    'column',
+    'region',
+    'intensity',
+    'designgroup',
+    'design group',
+    'sitecategory',
+    'site category',
+    'alphamax',
+    'alpha max',
+    'characteristicperiod',
+  ].some((token) => normalized.includes(token));
+}
+
+function hasLikelyGroundMotionTimeColumn(rows: number[][]): boolean {
+  const timeValues = rows
+    .filter((row) => row.length >= 2)
+    .map((row) => row[0]);
+  if (timeValues.length < 3) return false;
+  const deltas = timeValues.slice(1).map((value, index) => value - timeValues[index]);
+  return deltas.every((delta) => delta > 0 && delta <= 0.5);
+}
+
+function looksLikeGroundMotionRows(analysis: Record<string, unknown>): boolean {
+  const rows = numericRows(analysis.rows);
+  if (rows.length < 3) return false;
+  if (hasMotionHeaders(analysis.headers)) return rows.some((row) => row.length >= 2);
+  if (hasClearlyNonMotionHeaders(analysis.headers)) return false;
+  if (!isNumericHeaderRow(analysis.headers)) return false;
+  if (rows.every((row) => row.length === 1)) return rows.length >= 8;
+  return hasLikelyGroundMotionTimeColumn(rows);
+}
+
+function looksLikeGroundMotionText(analysis: Record<string, unknown>): boolean {
+  const ext = typeof analysis.ext === 'string' ? analysis.ext.toLowerCase() : '';
+  const content = typeof analysis.content === 'string' ? analysis.content : '';
+  if (!content.trim()) return false;
+  if (ext === '.at2') return true;
+  if (ext !== '.txt') return false;
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const numericLines = lines.filter((line) => {
+    const values = line.split(/[\s,;]+/).map(finiteCellNumber).filter((value) => value !== null);
+    return values.length > 0 && values.length === line.split(/[\s,;]+/).filter(Boolean).length;
+  });
+  return numericLines.length >= 4 && numericLines.length >= Math.ceil(lines.length * 0.5);
+}
+
+function looksLikeGroundMotionAttachmentAnalysis(analysis: Record<string, unknown>): boolean {
+  const type = typeof analysis.type === 'string' ? analysis.type : '';
+  if (type === 'csv') return looksLikeGroundMotionRows(analysis);
+  if (type === 'text') return looksLikeGroundMotionText(analysis);
+  if (type === 'excel' && isRecord(analysis.sheets)) {
+    return Object.values(analysis.sheets).some((sheetValue) =>
+      isRecord(sheetValue) && looksLikeGroundMotionRows(sheetValue));
+  }
+  return false;
+}
+
+function groundMotionAttachmentAnalyses(
+  attachmentAnalyses: AttachmentAnalysis[],
+): AttachmentAnalysis[] {
+  return attachmentAnalyses.filter(({ analysis }) => looksLikeGroundMotionAttachmentAnalysis(analysis));
+}
+
+function groundMotionRecordsFromAttachmentAnalyses(attachmentAnalyses: AttachmentAnalysis[]): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [];
+  for (const { attachment, analysis } of attachmentAnalyses) {
+    const type = typeof analysis.type === 'string' ? analysis.type : '';
+    if (type === 'csv') {
+      const record = analysisRowsRecord(attachment, analysis);
+      if (record) records.push(record);
+      continue;
+    }
+    if (type === 'text') {
+      const content = typeof analysis.content === 'string' ? analysis.content : '';
+      if (content.trim()) {
+        records.push({
+          id: attachment.fileId || attachment.relPath || attachment.originalName,
+          name: attachment.originalName,
+          recordType: 'actual',
+          source: 'uploaded_attachment',
+          fileId: attachment.fileId,
+          relPath: attachment.relPath,
+          content,
+          fileAnalysis: compactAttachmentAnalysisMetadata(analysis),
+        });
+      }
+      continue;
+    }
+    if (type === 'excel' && isRecord(analysis.sheets)) {
+      for (const [sheetName, sheetValue] of Object.entries(analysis.sheets)) {
+        if (!isRecord(sheetValue)) continue;
+        if (!looksLikeGroundMotionRows(sheetValue)) continue;
+        const record = analysisRowsRecord(attachment, sheetValue, sheetName);
+        if (record) {
+          records.push({
+            ...record,
+            fileAnalysis: {
+              ...compactAttachmentAnalysisMetadata(sheetValue),
+              workbook: compactAttachmentAnalysisMetadata(analysis),
+            },
+          });
+        }
+      }
+    }
+  }
+  return records;
+}
+
+function uploadedGroundMotionWorkflowFromAttachmentAnalyses(
+  attachmentAnalyses: AttachmentAnalysis[],
+): Record<string, unknown> | null {
+  const groundMotionAnalyses = groundMotionAttachmentAnalyses(attachmentAnalyses);
+  const records = groundMotionRecordsFromAttachmentAnalyses(groundMotionAnalyses);
+  if (records.length === 0) {
+    return null;
+  }
+  return {
+    groundMotionSet: {
+      source: 'uploaded',
+      uploadedAttachments: groundMotionAnalyses.map(({ attachment }) => attachmentSummary(attachment)),
+      records,
+    },
+  };
+}
+
+export function enrichUploadedGroundMotionWorkflow(
+  seismicWorkflow: Record<string, unknown>,
+  attachmentAnalyses: AttachmentAnalysis[],
+): Record<string, unknown> {
+  const groundMotionSet = isRecord(seismicWorkflow.groundMotionSet)
+    ? seismicWorkflow.groundMotionSet
+    : undefined;
+  const source = typeof groundMotionSet?.source === 'string'
+    ? groundMotionSet.source.trim().toLowerCase()
+    : '';
+  if (source !== 'uploaded' || !groundMotionSet) {
+    return seismicWorkflow;
+  }
+
+  const groundMotionAnalyses = groundMotionAttachmentAnalyses(attachmentAnalyses);
+  const uploadedAttachments = groundMotionAnalyses.map(({ attachment }) => attachmentSummary(attachment));
+  const existingRecords = Array.isArray(groundMotionSet.records) ? groundMotionSet.records : undefined;
+  const generatedRecords = existingRecords && existingRecords.length > 0
+    ? existingRecords
+    : groundMotionRecordsFromAttachmentAnalyses(groundMotionAnalyses);
+
+  return {
+    ...seismicWorkflow,
+    groundMotionSet: {
+      ...groundMotionSet,
+      uploadedAttachments,
+      ...(generatedRecords.length > 0 ? { records: generatedRecords } : {}),
+    },
+  };
+}
+
+export function extractContextSeismicWorkflow(
+  context?: LangGraphRunInput['context'],
+  attachmentAnalyses: AttachmentAnalysis[] = [],
+): Record<string, unknown> | null {
+  const seismicWorkflow = context?.seismicWorkflow;
+  if (!isRecord(seismicWorkflow) || Object.keys(seismicWorkflow).length === 0) {
+    return uploadedGroundMotionWorkflowFromAttachmentAnalyses(attachmentAnalyses);
+  }
+  return enrichUploadedGroundMotionWorkflow(seismicWorkflow, attachmentAnalyses);
 }
 
 function attachmentAnalysisText(
@@ -228,6 +507,21 @@ function toInitialHumanMessage(content: string | HumanMessageContentBlock[]): Hu
     : new HumanMessage(content);
 }
 
+function shouldKeepFullAttachmentAnalysis(
+  attachment: AttachmentInfo,
+  analysis: Record<string, unknown>,
+): boolean {
+  const name = `${attachment.originalName} ${attachment.relPath}`.toLowerCase();
+  const type = typeof analysis.type === 'string' ? analysis.type : '';
+  return (type === 'csv' || type === 'text')
+    && (
+      name.endsWith('.csv')
+      || name.endsWith('.tsv')
+      || name.endsWith('.at2')
+      || name.endsWith('.txt')
+    );
+}
+
 export async function buildInitialHumanMessagePayload(
   message: string,
   attachments: AttachmentInfo[] | undefined,
@@ -237,11 +531,12 @@ export async function buildInitialHumanMessagePayload(
 ): Promise<InitialHumanMessagePayload> {
   const attachmentBlock = buildAttachmentBlock(attachments, locale);
   if (!attachments || attachments.length === 0) {
-    return { content: message, canonicalMessage: message };
+    return { content: message, canonicalMessage: message, attachmentAnalyses: [] };
   }
 
   const contentParts = [message + attachmentBlock];
   const canonicalParts = [message + attachmentBlock];
+  const attachmentAnalyses: AttachmentAnalysis[] = [];
 
   for (const attachment of attachments) {
     const analysis = await analyzeUploadedFile(
@@ -250,6 +545,15 @@ export async function buildInitialHumanMessagePayload(
       undefined,
       { includeImageData: true },
     );
+    const runtimeAnalysis = shouldKeepFullAttachmentAnalysis(attachment, analysis)
+      ? await analyzeUploadedFile(
+        attachment.relPath,
+        workspaceRoot,
+        undefined,
+        { mode: 'full' },
+      )
+      : analysis;
+    attachmentAnalyses.push({ attachment, analysis: runtimeAnalysis });
     const analysisText = attachmentAnalysisText(attachment, analysis, locale);
     canonicalParts.push(analysisText);
     contentParts.push(analysisText);
@@ -281,6 +585,7 @@ export async function buildInitialHumanMessagePayload(
   return {
     content: contentParts.join('\n\n'),
     canonicalMessage: canonicalParts.join('\n\n'),
+    attachmentAnalyses,
   };
 }
 
@@ -440,6 +745,7 @@ export class LangGraphAgentService {
       this.workspaceRoot,
       { summarizeImages: true, signal: input.signal },
     );
+    const contextSeismicWorkflow = extractContextSeismicWorkflow(input.context, initialPayload.attachmentAnalyses);
     const stream = await graph.stream(
       {
         messages: [toInitialHumanMessage(initialPayload.content)],
@@ -447,6 +753,7 @@ export class LangGraphAgentService {
         workspaceRoot: this.workspaceRoot,
         selectedSkillIds: skillIds,
         lastUserMessage: initialPayload.canonicalMessage,
+        contextSeismicWorkflow,
         policy: {
           analysisType: input.context?.analysisType,
           designCode: input.context?.designCode,
@@ -523,6 +830,7 @@ export class LangGraphAgentService {
       this.workspaceRoot,
       { summarizeImages: true, signal: input.signal },
     );
+    const contextSeismicWorkflow = extractContextSeismicWorkflow(input.context, initialPayload.attachmentAnalyses);
     const result = await graph.invoke(
       {
         messages: [toInitialHumanMessage(initialPayload.content)],
@@ -530,6 +838,7 @@ export class LangGraphAgentService {
         workspaceRoot: this.workspaceRoot,
         selectedSkillIds: skillIds,
         lastUserMessage: initialPayload.canonicalMessage,
+        contextSeismicWorkflow,
         policy: {
           analysisType: input.context?.analysisType,
           designCode: input.context?.designCode,
@@ -565,6 +874,7 @@ export class LangGraphAgentService {
       this.workspaceRoot,
       { summarizeImages: true, signal: input.signal },
     );
+    const contextSeismicWorkflow = extractContextSeismicWorkflow(input.context, initialPayload.attachmentAnalyses);
     const result = await graph.invoke(
       {
         messages: [toInitialHumanMessage(initialPayload.content)],
@@ -572,6 +882,7 @@ export class LangGraphAgentService {
         workspaceRoot: this.workspaceRoot,
         selectedSkillIds: input.context?.skillIds || [],
         lastUserMessage: initialPayload.canonicalMessage,
+        contextSeismicWorkflow,
         policy: {
           analysisType: input.context?.analysisType,
           designCode: input.context?.designCode,
